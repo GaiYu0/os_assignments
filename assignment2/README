@@ -1,0 +1,43 @@
+##################################################
+make options START
+##################################################
+make Q1
+make Q2
+make Q3 (the default argument is USD 256)
+##################################################
+make options END
+##################################################
+
+##################################################
+Q1 START
+##################################################
+7 processes in total.
+
+(the indexes of processes do not represent the order
+in which processes are executed)
+process tree:
+process 0
+--process 1
+--process 2
+----process 4
+--process 3
+----process 5
+------process 6
+
+process 0 output:
+process 1 output:
+i = 0
+j = 0
+process 2 output: 
+i = 1
+process 3 output:
+i = 2
+process 4 output:
+j = 1
+process 5 output:
+process 6 output:
+j = 2
+
+##################################################
+Q1 END
+##################################################

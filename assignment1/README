@@ -1,0 +1,60 @@
+Operating System Assignment 1
+
+By Yu Gai
+NetID: yg1246
+
+####################################################################################################
+compiling rules START
+####################################################################################################
+
+make lib/lib_stack_array.a: make array-based stack library. (Q2)
+make Q3: Q3.
+make stack: make stack_test using lib_stack_list.a for Q5.
+make queue: make fifo_test for Q6.
+
+####################################################################################################
+compiling rules END
+####################################################################################################
+
+####################################################################################################
+files description START
+####################################################################################################
+
+include/
+
+src/stack_array.c: Q2
+src/list_impl.c: Q4
+src/stack_list.c: Q5
+src/fifo_list.c: Q6
+src/stack_test.c
+src/fifo_test.c
+
+obj/stack_array.o: Q2
+obj/list.o: Q4
+obj/stack_list.o: Q5
+obj/stack_test.o
+
+lib/lib_stack_array.a: array-based stack library for Q2
+lib/lib_stack_list.a: list-based stack library for Q5 and Q6
+
+makefile: contains the instructions for Q2 and Q3.
+
+####################################################################################################
+files description END
+####################################################################################################
+
+####################################################################################################
+Q7 START
+####################################################################################################
+In include/list.h, modify the definition of list_type to be:
+
+	struct list_type {
+		cell* head;
+		cell* tail;
+		int length;
+	};
+
+Modifiy init_list to initialize length to 0 at start, and modify insert_head, extract_head and extract_tail such that if an element is added or removed, the length is increased or decreased by 1. The list_size function only extracts the length field from list_type structures. Although insert_head, extract_head and extract_tail consume more time, the complexity of list_size function is O(1).
+####################################################################################################
+Q7 END
+####################################################################################################
