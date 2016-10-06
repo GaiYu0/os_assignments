@@ -1,0 +1,32 @@
+##########################
+# MAKEFILE OPTIONS START #
+##########################
+
+If the simulator receives "tasks" file contained in assignment archive, it outputs the state of tasks and queues every cycle.
+
+To use standard test cases:
+	make rr
+	make mfq
+	make iorr
+
+If the simulator receives extra test cases, it only outputs the changes of the state of tasks. Provided an extra test case, the simulator automatically compares the output changes to human-predicted changes. The simulator terminates if the simulated changes cannot match human-predicted changes. All test cases are placed in /test_cases. /test_cases/*_tasks specifies tasks and /test_cases/*_log contains human predictions.
+
+To use extra test cases:
+	make rr_extra
+	make mfq_extra
+	make iorr_extra
+
+########################
+# MAKEFILE OPTIONS END #
+########################
+
+################################
+# IMPLEMENTATION DETAILS START #
+################################
+
+IORR places an IO-interrupted task in an IO queue, and insert the task at the end of task queue if the task finishes IO.
+Therefore, the behaviors of IORR is not identical to the behaviors of implementations that places IO-interrupted tasks at the end of task queue directly.
+
+##############################
+# IMPLEMENTATION DETAILS END #
+##############################

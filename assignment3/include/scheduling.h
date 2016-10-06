@@ -37,12 +37,6 @@ typedef struct scheduler_data_t {
   int current_priority;
 } scheduler_data_t;
 
-int FCFS(task_t tasks[], int task_count, scheduler_data_t* scheduler_data, int current_time);
-
-int SJF(task_t tasks[], int task_count, scheduler_data_t* scheduler_data, int current_time);
-
-int SRTF(task_t tasks[], int task_count, scheduler_data_t* scheduler_data, int current_time);
-
 int RR(task_t tasks[], int task_count, scheduler_data_t* scheduler_data, int current_time);
 
 int MFQ(task_t tasks[], int task_count, scheduler_data_t* scheduler_data, int current_time);

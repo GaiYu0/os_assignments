@@ -48,13 +48,7 @@ typedef int (*scheduler_pointer)(
 
 
 scheduler_pointer parse_scheduler(char *name){
-  if (strcmp(name, "FCFS") == 0)
-    return &FCFS;
-  else if (strcmp(name, "SJF") == 0)
-    return &SJF;
-  else if (strcmp(name, "SRTF") == 0)
-    return &SRTF;
-  else if (strcmp(name, "RR") == 0)
+  if (strcmp(name, "RR") == 0)
     return &RR;
   else if (strcmp(name, "MFQ") == 0)
     return &MFQ;
@@ -67,8 +61,9 @@ scheduler_pointer parse_scheduler(char *name){
 int load_tasks(task_t tasks[], int max_task_count, FILE *file){
   char line [MAX_LINE_SIZE];
   int task_count = 0;
+  int matched = 0;
   while ((fgets(line, sizeof(line), file) != NULL) && (task_count != max_task_count)) {
-    sscanf(
+    matched = sscanf(
       line,
       "%s %u %u %u %u\n", 
       tasks[task_count].name,
@@ -77,6 +72,10 @@ int load_tasks(task_t tasks[], int max_task_count, FILE *file){
       &(tasks[task_count].io_duration),
       &(tasks[task_count].io_period)
     );
+    if (matched == 3) {
+      tasks[task_count].io_duration = 0;
+      tasks[task_count].io_period = 0;
+    }
     tasks[task_count].state = UPCOMING;
     tasks[task_count].execution_time = 0;
     tasks[task_count].remaining_time = tasks[task_count].computation_time;
@@ -170,18 +169,19 @@ int main(int argc, char *argv[]){
   
   int time;
   for(time = 0; exising_unterminated_tasks(tasks, task_count) > 0; time++) {
-    // printf("%d\n", time);
+    // if (time == 30) break;
     task_index = (*scheduler)(tasks, task_count, scheduler_data, time);
-    /*
-    printf("******************************\n");
-    print_tasks(tasks, task_count);
-    printf("******************************\n");
-    if (task_index >= 0) {
+    
+    if (event_count == 0) {
+      print_tasks(tasks, task_count);
+      if (task_index >= 0) {
         printf("\nTime %d: %s\n", time, tasks[task_index].name);
-    } else {
+      } else {
         printf("\nTime %d: no task to schedule\n", time);
+        if(exising_unterminated_tasks(tasks, task_count) == 0)
+          break;
+      }
     }
-    */
 
     for(task_index = 0; task_index != task_count; task_index++){
       // update statistics
@@ -206,16 +206,18 @@ int main(int argc, char *argv[]){
         );
         if (event_count != 0){
           printf("%s", event_string);
-          printf("%s", events[event_index]);
           if ((event_index == event_count) || (strcmp(event_string, events[event_index]) != 0)) {
-            printf("An unexpected event occurred.\n");
+            printf("An unexpected event occurred. Expected event: %s", events[event_index]);
             return -1;
+          } else {
+            printf("Simulated event matches human prediction.\n");
           }
           event_index ++;
         }
         previous_states[task_index] = tasks[task_index].state;
       }
     } // for
+
   } // for
   
   // print_tasks(tasks, task_count);

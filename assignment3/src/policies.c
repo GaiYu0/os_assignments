@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <scheduling.h>
 
-#define QUEUE_FCFS 1
 
 void print_queues(task_t tasks[], scheduler_data_t* scheduler_data) {
     int i, j, task_index = 0;
@@ -26,6 +25,7 @@ void print_queues(task_t tasks[], scheduler_data_t* scheduler_data) {
 /*************************
 * QUEUE PRIMITIVES START *
 *************************/
+
 
 int enqueue(scheduler_data_t* scheduler_data, int queue_index, int task_index) {
   int end;
@@ -66,204 +66,10 @@ int front(scheduler_data_t* scheduler_data, int queue_index) {
   }
 }
 
+
 /***********************
 * QUEUE PRIMITIVES END *
 ***********************/
-
-
-#if QUEUE_FCFS
-int FCFS(task_t tasks[], int task_count, scheduler_data_t* scheduler_data, int current_time) {
-  int task_index;
-  for(task_index = 0; task_index != task_count; task_index++)
-    if((tasks[task_index].state == UPCOMING) && (tasks[task_index].arrival_date == current_time)){
-      if(scheduler_data->queues[0][scheduler_data->ends[0]] == MAX_TASK_COUNT){
-        scheduler_data->queues[0][scheduler_data->ends[0]] = task_index;
-        scheduler_data->ends[0] = (scheduler_data->ends[0] + 1) % MAX_TASK_COUNT;
-        tasks[task_index].state = READY;
-      } else {
-        // TODO
-        return -1;
-      }
-    }
-
-  if(scheduler_data->starts[0] != MAX_TASK_COUNT){
-    int current_task_index;
-    current_task_index = scheduler_data->queues[0][scheduler_data->starts[0]];
-    tasks[current_task_index].execution_time++;
-    if(tasks[current_task_index].execution_time == tasks[current_task_index].computation_time){
-      tasks[current_task_index].state = TERMINATED;
-      scheduler_data->starts[0] = (scheduler_data->starts[0] + 1) % MAX_TASK_COUNT;
-      current_task_index = scheduler_data->queues[0][scheduler_data->starts[0]];
-    }
-    tasks[current_task_index].state = RUNNING;
-    return current_task_index;
-  }
-  return -1;
-}
-#else
-int FCFS(task_t tasks[], int task_count, scheduler_data_t* scheduler_data, int current_time) {
-    
-    int i, j;
-    
-    // Initialize single queue
-    if (current_time == 0) {
-        printf("Initializing job queue\n");
-        scheduler_data->queue_count = 1;
-        for (i = 0; i < MAX_TASK_COUNT; i++) {
-            scheduler_data->queues[0][i] = -1;
-        }
-    }
-    
-    // Admit new tasks (current_time >= arrivalTime)
-    j = 0;
-    while (scheduler_data->queues[0][j] != -1)
-        j++;
-    for(i = 0; i < task_count; i++) {
-        if ((tasks[i].state == UPCOMING) && (tasks[i].arrival_date == current_time)) {
-            tasks[i].state = READY;
-            scheduler_data->queues[0][j] = i;
-            j++;
-        }
-    }
-    print_queues(tasks, scheduler_data);
-    
-    // Is the first task in the queue running? Has that task finished its computations?
-    //   If so, put it in terminated state and remove it from the queue
-    //   If not, continue this task
-    i = scheduler_data->queues[0][0];
-    if (i != -1) {
-        if (tasks[i].state == RUNNING) {
-            if (tasks[i].execution_time == tasks[i].computation_time) {
-                tasks[i].state = TERMINATED;
-                for (j = 0; j < MAX_TASK_COUNT - 1; j++) {
-                    scheduler_data->queues[0][j] = scheduler_data->queues[0][j+1];
-                }
-            } else {
-                // Reelect this task
-                tasks[i].execution_time ++;
-                return i;
-            }
-        }
-    }
-    
-    // Otherwise, elect the first task in the queue
-    i = scheduler_data->queues[0][0];
-    if (i != -1){
-        tasks[i].execution_time ++;
-        tasks[i].state = RUNNING;
-        return i;
-    }
-    
-    // No task could be elected
-    return -1;
-}
-#endif
-
-
-int SJF(task_t tasks[], int task_count, scheduler_data_t* scheduler_data, int current_time) {
-  // print_queues(tasks, scheduler_data);
-  int current_task_index;
-  current_task_index = scheduler_data->queues[0][scheduler_data->starts[0]];
-  if(current_task_index != MAX_TASK_COUNT){
-    tasks[current_task_index].execution_time++;
-    if(tasks[current_task_index].execution_time == tasks[current_task_index].computation_time){
-      tasks[current_task_index].state = TERMINATED;
-      scheduler_data->starts[0] = (scheduler_data->starts[0] + 1) % MAX_TASK_COUNT;
-    }
-  }
-  int task_index;
-  for(task_index = 0; task_index != task_count; task_index++)
-    if((tasks[task_index].state == UPCOMING) && (tasks[task_index].arrival_date == current_time)){
-      if(scheduler_data->queues[0][scheduler_data->ends[0]] == MAX_TASK_COUNT){
-        scheduler_data->queues[0][scheduler_data->ends[0]] = task_index;
-        tasks[task_index].state = READY;
-        scheduler_data->ends[0] = (scheduler_data->ends[0] + 1) % MAX_TASK_COUNT;
-      } else {
-        // TODO
-        // memory exhausted
-        return -1;
-      }
-      int queue_index;
-      int next_index;
-      // sort task queue
-      if(scheduler_data->ends[0] - scheduler_data->starts[0] != 1)
-        for(
-          queue_index = (scheduler_data->ends[0] - 1) % MAX_TASK_COUNT;
-          (next_index = (queue_index - 1) % MAX_TASK_COUNT) != scheduler_data->starts[0];
-          queue_index = next_index
-        )
-          if(
-            tasks[scheduler_data->queues[0][queue_index]].computation_time
-              <
-            tasks[scheduler_data->queues[0][next_index]].computation_time
-          ){
-            int cache;
-            cache = scheduler_data->queues[0][queue_index];
-            scheduler_data->queues[0][queue_index] = scheduler_data->queues[0][next_index];
-            scheduler_data->queues[0][next_index] = cache;
-          }
-    }
-  
-  if(scheduler_data->queues[0][scheduler_data->starts[0]] != MAX_TASK_COUNT) {
-    tasks[scheduler_data->queues[0][scheduler_data->starts[0]]].state = RUNNING;
-    return scheduler_data->queues[0][scheduler_data->starts[0]];
-  } else
-    return -1;
-}
-
-
-int SRTF(task_t tasks[], int task_count, scheduler_data_t* scheduler_data, int current_time) {
-  // print_queues(tasks, scheduler_data);
-  int current_task_index;
-  current_task_index = scheduler_data->queues[0][scheduler_data->starts[0]];
-  if(current_task_index != MAX_TASK_COUNT){
-    tasks[current_task_index].execution_time++;
-    tasks[current_task_index].remaining_time--;
-    printf("%d %d\n", tasks[current_task_index].execution_time, tasks[current_task_index].computation_time);
-    if(tasks[current_task_index].remaining_time == 0){
-      tasks[current_task_index].state = TERMINATED;
-      scheduler_data->starts[0] = (scheduler_data->starts[0] + 1) % MAX_TASK_COUNT;
-    }
-  }
-  int task_index;
-  for(task_index = 0; task_index != task_count; task_index++)
-    if((tasks[task_index].state == UPCOMING) && (tasks[task_index].arrival_date == current_time)){
-      if(scheduler_data->queues[0][scheduler_data->ends[0]] == MAX_TASK_COUNT){
-        scheduler_data->queues[0][scheduler_data->ends[0]] = task_index;
-        tasks[task_index].state = READY;
-        scheduler_data->ends[0] = (scheduler_data->ends[0] + 1) % MAX_TASK_COUNT;
-      } else {
-        // TODO
-        // memory exhausted
-        return -1;
-      }
-      int queue_index;
-      int next_index;
-      // sort task queue
-      if(scheduler_data->ends[0] - scheduler_data->starts[0] != 1)
-        for(
-          queue_index = (scheduler_data->ends[0] - 1) % MAX_TASK_COUNT;
-          (next_index = (queue_index - 1) % MAX_TASK_COUNT) != scheduler_data->starts[0];
-          queue_index = next_index
-        )
-          if(
-            tasks[scheduler_data->queues[0][queue_index]].remaining_time
-              <
-            tasks[scheduler_data->queues[0][next_index]].remaining_time
-          ){
-            int cache;
-            cache = scheduler_data->queues[0][queue_index];
-            scheduler_data->queues[0][queue_index] = scheduler_data->queues[0][next_index];
-            scheduler_data->queues[0][next_index] = cache;
-          }
-    }
-  
-  if (scheduler_data->queues[0][scheduler_data->starts[0]] != MAX_TASK_COUNT) {
-    tasks[scheduler_data->queues[0][scheduler_data->starts[0]]].state = RUNNING;
-    return scheduler_data->queues[0][scheduler_data->starts[0]];
-  } else
-    return -1;
-}
 
 
 int RR(task_t tasks[], int task_count, scheduler_data_t* scheduler_data, int current_time) {
@@ -372,7 +178,6 @@ int MFQ(task_t tasks[], int task_count, scheduler_data_t* scheduler_data, int cu
 }
 
 
-// Round Robin scheduler supporting IO interruption.
 #define TASK_QUEUE 0
 #define IO_QUEUE 1
 int IORR(task_t tasks[], int task_count, scheduler_data_t* scheduler_data, int current_time) {
@@ -451,7 +256,6 @@ int IORR(task_t tasks[], int task_count, scheduler_data_t* scheduler_data, int c
         dequeue(scheduler_data, IO_QUEUE);
         if (tasks[io_task_index].execution_time == tasks[io_task_index].computation_time) {
           // terminate
-          printf("here\n");
           tasks[io_task_index].state = TERMINATED;
         } else {
           // to task queue
