@@ -1,48 +1,48 @@
-#########################
-# human prediction 	#
-# quantum = 100	   	#
-# task queue + io queue #
-#########################
+####################
+# human prediction #
+# 3 queues	   #
+# quantum = 100	   #
+####################
 0 T1 running
 0 T2 ready
 0 T3 ready
 0 T4 ready
-# T1 T2 T3 T4 |
+# 1 2 3 4
 100 T1 ready
 100 T2 running
-# T2 T3 T4 T1 |
+# 2 3 4 1
 110 T2 suspended
-# T3 T4 T1 | T2
 # finish at 360
 110 T3 running
+# 3 4 1 2b
 210 T3 ready
-# T4 T1 T3 | T2
 210 T4 running
+# 4 1 2b 3
 230 T1 running
 230 T4 suspended
 # finish at 410
-# T1 T3 | T2 T4
+# 1 2b 3 4b
 330 T1 ready
-# T3 T1 | T2 T4
 330 T3 running
+# 2b 3 4b 1
 360 T2 ready
-# T3 T1 T2 | T4
+# 2 3 4b 1
 410 T4 ready
-# T3 T1 T2 T4
-430 T1 running
+# 2 3 4 1
+430 T2 running
 430 T3 terminated
-# T1 T2 T4
-530 T1 terminated
-530 T2 running
-# T2 T4
-540 T2 suspended
-540 T4 running
-# T4 | T2
-# finish at 790
-560 T4 suspended
-# | T2 T4
-# finish at 740
-740 T4 terminated
-790 T2 running
-800 T2 suspended
-1050 T2 terminated
+# 2 4 1
+440 T2 suspended
+# finish at 690
+440 T4 running
+# 4 1 2b
+460 T1 running
+460 T4 suspended
+# finish at 640
+# 1 2b 4b
+560 T1 terminated
+# 2b 4b
+640 T4 terminated
+690 T2 running
+700 T2 suspended
+950 T2 terminated

@@ -33,6 +33,7 @@ typedef struct scheduler_data_t {
   int queues[MAX_QUEUE_COUNT][MAX_TASK_COUNT];
   int starts[MAX_QUEUE_COUNT];
   int ends[MAX_QUEUE_COUNT];
+  int lengths[MAX_QUEUE_COUNT];
   int quantum;
   int current_priority;
 } scheduler_data_t;

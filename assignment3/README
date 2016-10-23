@@ -20,13 +20,15 @@ To use extra test cases:
 # MAKEFILE OPTIONS END #
 ########################
 
-################################
-# IMPLEMENTATION DETAILS START #
-################################
+#########################
+# SUBMITTED FILES START #
+#########################
 
-IORR places an IO-interrupted task in an IO queue, and insert the task at the end of task queue if the task finishes IO.
-Therefore, the behaviors of IORR is not identical to the behaviors of implementations that places IO-interrupted tasks at the end of task queue directly.
+include/scheduling.h: declarations of data structures and schedulers
+src/policies.c: implementations of scheduling policies and queue primitives facilitating the schedulers
+src/simulator.c: simulator (modified)
+test_cases/: the directory containing test cases
 
-##############################
-# IMPLEMENTATION DETAILS END #
-##############################
+#######################
+# SUBMITTED FILES END #
+#######################
