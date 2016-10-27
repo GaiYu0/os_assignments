@@ -1,39 +1,45 @@
 #include<signal.h>
-#include<sys/types.h>
 #include<unistd.h>
 
 #include<header.h>
 
-int _status;
-pid_t _terminated_pid;
+struct sigaction _previous_actions[NSIG - 2]; // cache previous signal action
 
-void _wait_handler(int signal, siginfo_t *info, void *pointer) {
-  if (signal == SIGCHLD) {
-    _status = info->si_status;
-    _terminated_pid = info->si_pid;
+int _remaining_time = 0;
+
+void _handler_alrm(int signal) {
+  if (signal == SIGALRM) { // sleeping time elapsed
+    _remaining_time = 0;
+  }
+  else { // sleeping interrupted
+    (*(_previous_actions[signal - 2].sa_handler))(signal); // call user handler
+    _remaining_time = alarm(0); // remaining sleeping time
   }
 }
 
-int mywait(int *status) {
-  sigset_t signal_set;
-  sigemptyset(&signal_set);
-  sigaddset(&signal_set, SIGCHLD);
-
-  sigset_t signal_mask;
-  sigfillset(&signal_mask);
-  sigdelset(&signal_mask, SIGCHLD);
+int mysleep(int seconds) {
+  sigset_t mask, previous_mask;
+  sigfillset(&mask);
+  sigprocmask(SIG_SETMASK, &mask, &previous_mask); // mask all signals
 
   struct sigaction action;
-  action.sa_flags = SA_SIGINFO;
-  action.sa_mask = signal_mask;
-  action.sa_sigaction = &_wait_handler;
+  action.sa_handler = &_handler_alrm;
+  action.sa_mask = mask;
 
-  sigaction(SIGCHLD, &action, NULL);
+  int i;
+  for (i = 2; i != NSIG; i++) // register handlers and cache previous action vectors
+    sigaction(i, &action, &_previous_actions[i - 2]);
 
-  pause();
+  alarm(seconds);
 
-  if (status) {
-    *status = _status;
-  }
-  return _terminated_pid;
+  sigsuspend(&previous_mask); // use the mask of user
+
+  sigprocmask(SIG_SETMASK, &mask, NULL); // mask all signals
+
+  for (i = 2; i != NSIG; i++) // register handlers and cache previous action vectors
+    sigaction(i, &action, &_previous_actions[i - 1]);
+
+  sigprocmask(SIG_SETMASK, &previous_mask, NULL); // reset mask
+
+  return _remaining_time;
 }

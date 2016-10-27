@@ -1,26 +1,34 @@
+#include<signal.h>
 #include<stdio.h>
-#include<stdlib.h>
+#include<sys/types.h>
+#include<time.h>
 #include<unistd.h>
 
 #include<header.h>
 
+void handler(int signal) {
+  if (signal == SIGUSR1)
+    printf("handler called\n");
+}
+
 int main() {
-  int pid, child_pid;
+  struct sigaction action;
+  action.sa_handler = &handler;
+  sigaction(SIGUSR1, &action, NULL);
+
+  pid_t pid;
   pid = fork();
-  int status = 0;
-  switch (pid) {
-  case -1:
-    perror("forking error\n");
-    exit(-1);
-  case 0:
-    printf("child terminating\n");
-    exit(9);
-  default:
-    child_pid = mywait(&status);
-    printf("child termination code %d\n", status);
-    printf("pid of the forked child %d\n", pid);
-    printf("pid of the terminated child %d\n", pid);
-    break;
+  time_t start, end;
+  start = time(NULL);
+  if (pid > 0) {
+    mysleep(1);
+  } else {
+    mysleep(1024);
   }
+  end = time(NULL);
+  printf("sleeping time: %d seconds\n", (int)(end - start));
+  if (pid > 0)
+    kill(pid, SIGUSR1);
+
   return 0;
 }

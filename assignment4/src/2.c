@@ -1,48 +1,85 @@
 #include<signal.h>
+#include<stdio.h>
+#include<stdlib.h>
+#include<sys/types.h>
 #include<unistd.h>
 
-#include<header.h>
+pid_t parent_pid, self_pid, child_pid;
 
-struct sigaction _previous_actions[NSIG - 1]; // cache previous signal action
-
-int _remaining_time = 0;
-
-void _handler_alrm(int signal) {
-  if (signal != SIGALRM) {
-    _remaining_time = alarm(0); // remaining sleeping time
-  } else {
-    _remaining_time = 0; // end of sleep
-  }
-  // restore handler vector
-  int i;
-  for (i = 1; i != NSIG; i++) {
-    sigaction(i, &_previous_actions[i - 1], NULL);
+void handler(int signal) {
+  switch (signal) {
+  case SIGUSR1: // handling the 1st wave of signals
+    if (parent_pid) { // inform the parent
+      kill(parent_pid, SIGUSR1);
+    } else { // start the 2nd wave
+      printf("2nd wave started\n");
+      kill(child_pid, SIGUSR2);
+    }
+    break;
+  case SIGUSR2: // handling the 2nd wave of signals
+    if (child_pid) { // inform the child
+      kill(child_pid, SIGUSR2);
+    } else { // start the 3rd wave
+      printf("3rd wave started\n");
+      kill(parent_pid, SIGINT);
+    }
+    break;
+  case SIGINT: // handling the 3rd wave of signals
+    if (parent_pid) { // inform the parent
+      kill(parent_pid, SIGINT);
+    } else { // the root process terminates
+      printf("End of program.\n");
+    }
+    exit(0);
   }
 }
 
-int mysleep(int seconds) {
-  sigset_t signal_mask, previous_mask;
-  sigfillset(&signal_mask); // mask
 
-  // mask all interruptions
-  sigprocmask(SIG_SETMASK, &signal_mask, &previous_mask);
-
-  // initialize signal action
-  struct sigaction action;
-  action.sa_handler = &_handler_alrm;
-  action.sa_mask = signal_mask;
-
-  // register signal action
-  int i;
-  for (i = 2; i != NSIG; i++) {
-    sigaction(i, &action, &_previous_actions[i - 1]); // cache previous action vector
+int main(int argc, char *argv[]) {
+  int N = 3;
+  if (argc > 1) { 
+    N = atoi(argv[1]);
   }
 
-  sigprocmask(SIG_UNBLOCK, &signal_mask, &previous_mask); // unmask
+  // register handlers
+  struct sigaction action;
+  action.sa_handler = &handler;
+  sigaction(SIGUSR1, &action, NULL);
+  sigaction(SIGUSR2, &action, NULL);
+  sigaction(SIGINT, &action, NULL);
 
-  alarm(seconds);
+  int child_index;
+  parent_pid = 0;
+  self_pid = getpid();
+  for (child_index = 0; child_index != N; child_index++) {
+    self_pid = getpid();
+    child_pid = fork();
+    if (child_pid == 0) { // child
+      parent_pid = self_pid;
+    } else { // parent
+      break;
+    }
+  }
 
-  pause();
- 
-  return _remaining_time;
+  sigset_t full_mask, null_mask;
+  sigfillset(&full_mask);
+  sigemptyset(&null_mask);
+  sigprocmask(SIG_SETMASK, &full_mask, NULL); // mask all signals
+
+  if (child_index == N) { // start the 1st wave
+    printf("1st wave started\n");
+    kill(parent_pid, SIGUSR1);
+  } else { // wait for the arrival of the 1st wave
+    sigsuspend(&null_mask);
+  }
+
+  if (parent_pid != 0) { // wait for the arrival of the 2nd wave
+    sigsuspend(&null_mask);
+  }
+
+  if (child_index != N) { // wait for the arrival of the 3rd wave
+    sigsuspend(&null_mask);
+  }
+
+  return 0;
 }
