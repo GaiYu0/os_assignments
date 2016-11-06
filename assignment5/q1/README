@@ -1,0 +1,19 @@
+#####################
+# DESCRIPTION START #
+#####################
+
+To compile, run "make server" and "make client".
+To test the program, run
+  "cd test_cases; bash server.sh"
+and
+  "cd test_cases; bash client.sh"
+in different terminals.
+
+server.sh creates 4 servers.
+client.sh sends all possible conversion requests to the 4 servers respectively.
+Only EUR, RMB and USD are supported.
+Therefore, client.sh sends 3 * 3 * 4 = 36 requests in total and every server receives 3 * 3 = 9 requests.
+
+###################
+# DESCRIPTION END #
+###################
