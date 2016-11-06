@@ -34,8 +34,6 @@ int mysleep(int seconds) {
 
   sigsuspend(&previous_mask); // use the mask of user
 
-  sigprocmask(SIG_SETMASK, &mask, NULL); // mask all signals
-
   for (i = 2; i != NSIG; i++) // register handlers and cache previous action vectors
     sigaction(i, &action, &_previous_actions[i - 1]);
 
