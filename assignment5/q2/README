@@ -1,0 +1,32 @@
+#####################
+# DESCRIPTION START #
+#####################
+
+Every chopstick is a semaphore.
+In addition, N philosophers are divided into ceil(N / 2) groups.
+There is one semaphore for every group (denoted by G).
+Pseudocode:
+  P(G);
+  P(chopstick left);
+  P(chopstick right);
+  V(G);
+  dine();
+  V(chopstick right);
+  V(chopstick left);
+
+If N = 2 * i + 1, then a maximum number of i philosophers could dine simultaneously.
+If N = 2 * i, the optimal maximum number is i. However, usually the maximum number is (i - 1).
+
+Run "make" to compile.
+To change the time of dinning, run "make CFLAGS=-DINTERVAL=time".
+
+To test the program, run "philosophers M N", in which M is the number of philosopher, 
+and N is the times that every philosopher dines.
+
+The program prints an array "visualizing" the dinner.
+If the ith philosopher is dinning, then the ith element of the array is 1.
+Otherwise the ith element is 0.
+
+###################
+# DESCRIPTION END #
+###################
