@@ -1,0 +1,24 @@
+compile q1:
+  cd q1;make
+test q1:
+  cd q1;bash test_cases/test.sh 512
+
+compile q2:
+  cd q2;make
+test q2:
+  cd q2;bash test_cases/test.sh 1024
+
+Test cases for q1 and q2
+  test_cases/test.sh receives an argument N. In test_cases/, there are 3 text files: p0, p1 and p2, which respectively contain 3 paragraphs of Lincoln's Gettysburg address. test_cases/test.sh copies those 3 files to files/, ensuring there are N files in /files in total. test_cases/test.sh passes the N files as arguments to q1/q1 and q2/q2, and display the result.
+  The test case for q1 cannot work if N is extremely large because there is an upper bound of "open" system call.
+  N could be an arbitrary integer for q2 because there is at most N_THREADS files open simultaneously.
+
+compile q3:
+  cd q3;make
+test q3:
+  cd q3;./q3 1024
+
+compile q4:
+  cd q4;make
+test q4:
+  cd q4;./q4 1024
