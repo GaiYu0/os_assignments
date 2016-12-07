@@ -1,4 +1,5 @@
 #include<stdlib.h>
+
 #include<header.h>
 
 #define INITIAL_CAPACITY 8
@@ -7,7 +8,8 @@
 int _grow(array_t* array);
 
 int construct_array(array_t* array) {
-  array->front = (void**)malloc(INITIAL_CAPACITY * UNIT);
+  array->array = (void**)malloc(INITIAL_CAPACITY * UNIT);
+  if (array->array == NULL) { return -1; }
   array->maximum_length = INITIAL_CAPACITY;
   array->length = 0;
   return 0;
@@ -15,25 +17,25 @@ int construct_array(array_t* array) {
 
 int destroy_array(array_t* array) {
   int i;
-  for (i = 0; i != array->length; i++) {
-    free(array->front[i]);
+  if (array->array != NULL) {
+    free(array->array);
+    array->array = NULL;
   }
-  free(array->front);
   return 0;
 }
 
 int array_append(array_t* array, void* element) {
   if (array->length == array->maximum_length) {
-    _grow(array);
+    if (_grow(array) == -1) { return -1; }
   }
-  array->front[array->length] = element;
+  array->array[array->length] = element;
   array->length++;
   return 0;
 }
 
 void* array_index(array_t* array, int index) {
   if (index < array->length) {
-    return array->front[index];
+    return array->array[index];
   } else {
     return NULL;
   }
@@ -41,10 +43,9 @@ void* array_index(array_t* array, int index) {
 
 int array_delete(array_t* array, int index) {
   if (index < array->length) {
-    free(array->front[index]);
     int i;
     for (i = index + 1; i != array->length; i++) {
-      array->front[i - 1] = array->front[i];
+      array->array[i - 1] = array->array[i];
     }
     array->length--;
     return 0;
@@ -53,8 +54,21 @@ int array_delete(array_t* array, int index) {
   } 
 }
 
+int array_find_reference(array_t* array, void* reference) {
+  int i;
+  for (i = 0; i != array->length; i++) {
+    if (array->array[i] == reference) {
+      return i;
+    }
+  }
+  return -1;
+}
+
 int _grow(array_t* array) {
+  void *pointer;
+  pointer = realloc((void*)(array->array), array->maximum_length * UNIT * 2);
+  if (pointer == NULL) { return -1; }
+  array->array = pointer;
   array->maximum_length *= 2;
-  array->front = realloc((void*)(array->front), array->maximum_length * UNIT);
   return 0;
 }

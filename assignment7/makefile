@@ -1,11 +1,15 @@
 INCLUDE=-I.
-server:
-	gcc -o server server.c -pthread ${INCLUDE}
-client:
-	gcc -o client client.c ${INCLUDE}
+all: clean server client
+
 array:
 	gcc -o object/array dynamic_array.c -c ${INCLUDE}
-	gcc -o object/array_test dynamic_array_test.c -c ${INCLUDE}
-	gcc -o array-test object/array object/array_test
+client:
+	gcc -o object/client client.c -c ${INCLUDE}
+	gcc -o client object/client object/utility ${INCLUDE}
+server:	clean array utility
+	gcc -o object/server server.c -c -lpthread ${INCLUDE} -D_REENTRANT
+	gcc -o server object/server object/array object/utility -lpthread ${INCLUDE}
+utility:
+	gcc -o object/utility utility.c -c ${INCLUDE}
 clean:
 	rm -f ./server ./client ./array-test ./object/*

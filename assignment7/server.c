@@ -1,7 +1,13 @@
+/*
+ * server pressure test
+ * client execute
+ */
+#include<arpa/inet.h>
 #include<errno.h>
 #include<fcntl.h>
 #include<netinet/in.h>
 #include<pthread.h>
+#include<signal.h>
 #include<stdio.h>
 #include<stdlib.h>
 #include<string.h>
@@ -12,88 +18,252 @@
 
 #include<header.h>
 
-#define BUFFER_LENGTH 16
+#define CACHE "cache"
 #define FOLDER "storage"
 
-int socket_connection, socket_client;
-struct sockaddr_in address_server, address_client;
-void cleanup();
+typedef struct client_info {
+  int socket;
+  struct sockaddr_in address;
+} client_info_t;
 
-int main(int argc, char *argv[]) {
-  atexit(&cleanup);
-  if ((socket_connection = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
-    perror("socket");
-    exit(0);
-  }
-  memset(&address_server, 0, sizeof(struct sockaddr_in));
-  address_server.sin_addr.s_addr = htonl(INADDR_ANY);
-  address_server.sin_family = AF_INET;
-  if (argc == 2) {
-    address_server.sin_port = htons(atoi(argv[1]));
-  } else {
-    address_server.sin_port = htons(SERVER_PORT);
-  }
-
-  int indicator;
-  indicator = bind(
-    socket_connection,
-    (struct sockaddr*)(&address_server),
-    (socklen_t)sizeof(struct sockaddr_in)
-  );
-  if (indicator == -1) {
-    perror("bind");
-    exit(0);
-  }
-
-  socklen_t address_length = sizeof(struct sockaddr_in);
-  if (listen(socket_connection, 4) == -1) {
-    perror("listen");
-    exit(0);
-  }
-  socket_client = accept(socket_connection, (struct sockaddr*)(&address_client), &address_length);
-  if (socket_client == -1) {
-    perror("accept");
-    exit(0);
-  }
-
-  struct stat status;
-  if ((stat(FOLDER, &status) != 0) || (!S_ISDIR(status.st_mode))) {
-    if (mkdir(FOLDER, S_IRWXU | S_IRWXG | S_IXOTH) == -1) {
-      perror("mkdir");
-      exit(0);
-    }
-  }
-  char file_name[MAXIMUM_FILE_NAME_LENGTH + 1];
-  if (read(socket_client, file_name, MAXIMUM_FILE_NAME_LENGTH + 1) == -1) {
-    perror("read");
-    exit(0);
-  }
-  char *path;
-  asprintf(&path, "%s/%s", FOLDER, file_name);
-  printf("%s\n", path);
-  int fd;
-  if ((fd = open(path, O_CREAT | O_EXCL | O_RDWR, 0600)) == -1) {
-    if (errno == EEXIST) {
-      // TODO feedback
-    } else {
-      perror("open");
-      exit(0);
-    }
-  }
-  char buffer[BUFFER_LENGTH];
-  int length = 1;
-  while(length != 0) {
-    if ((length = read(socket_client, buffer, BUFFER_LENGTH * sizeof(char))) == -1) {
-      perror("read");
-      exit(0);
-    }
-    write(fd, buffer, length * sizeof(char));
-  }
-  cleanup();
+int construct_client_info(client_info_t *client) {
+  client->socket = 0;
+  memset(&(client->address), 0, sizeof(struct sockaddr_in));
   return 0;
 }
 
+int destroy_client_info(client_info_t *client) {
+  if (client->socket > 0) {
+    shutdown(client->socket, SHUT_RDWR);
+    close(client->socket);
+  }
+  return 0;
+}
+
+int socket_connection;
+struct sockaddr_in address_server;
+array_t clients;
+pthread_mutex_t info_lock = PTHREAD_MUTEX_INITIALIZER;
+
+int cleaned;
+void cleanup();
+void signal_cleanup(int signal);
+
+void* client_thread(void*);
+
+typedef int(*server_function)(client_info_t*);
+int upload(client_info_t*);
+int download(client_info_t*);
+int execute(client_info_t *client);
+
+server_function function_table[N_S_FUNCTIONALITY] = {
+  &upload,
+  &download,
+  &execute,
+};
+
+int initialize_server(int argc, char *argv[]);
+
+int main(int argc, char *argv[]) {
+  if (initialize_server(argc, argv) == -1) {
+    printf("Initialization failed.\n");
+    exit(0);
+  }
+
+  client_info_t *client;
+  pthread_t tid;
+  while (1) {
+    client = (client_info_t*)malloc(sizeof(client_info_t));
+    construct_client_info(client);
+    socklen_t address_length = sizeof(struct sockaddr_in);
+    if (
+      (client->socket = accept(socket_connection, (struct sockaddr*)(&(client->address)), &address_length)) == -1
+    ) { LOG_ERROR(); continue; }
+
+    pthread_mutex_lock(&info_lock);
+    array_append(&clients, (void*)client);
+    pthread_create(&tid, NULL, &client_thread, clients.array[clients.length - 1]);
+    pthread_mutex_unlock(&info_lock);
+
+    printf(
+      "Connected to client %s:%d.\n",
+      inet_ntoa(client->address.sin_addr),
+      client->address.sin_port
+    );
+  }
+  return 0;
+}
+
+int initialize_server(int argc, char *argv[]) {
+  struct sigaction action;
+  action.sa_handler = &signal_cleanup;
+  sigaction(SIGINT, &action, NULL);
+
+  atexit(&cleanup);
+
+  construct_array(&clients);
+
+  if ((socket_connection = socket(AF_INET, SOCK_STREAM, 0)) == -1) { LOG_ERROR(); return -1; }
+  memset(&address_server, 0, sizeof(struct sockaddr_in));
+  address_server.sin_addr.s_addr = htonl(INADDR_ANY);
+  address_server.sin_family = AF_INET;
+  if (argc == 2) { address_server.sin_port = htons(atoi(argv[1])); }
+  else { address_server.sin_port = htons(SERVER_PORT); }
+
+  if (
+    bind(socket_connection, (struct sockaddr*)(&address_server), (socklen_t)sizeof(struct sockaddr_in)) == -1
+  ) { LOG_ERROR(); return -1; }
+
+  int reuse = 1;
+  if (setsockopt(socket_connection, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(int)) == -1) { LOG_ERROR(); return -1; }
+
+  if (listen(socket_connection, 4) == -1) { LOG_ERROR(); return -1; }
+
+  struct stat status;
+  if ((stat(CACHE, &status) != 0) || (!S_ISDIR(status.st_mode))) {
+    if (mkdir(CACHE, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) == -1) { LOG_ERROR(); return -1; }
+  }
+  if ((stat(FOLDER, &status) != 0) || (!S_ISDIR(status.st_mode))) {
+    if (mkdir(FOLDER, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) == -1) { LOG_ERROR(); return -1; }
+  }
+
+  return 0;
+}
+
+void* client_thread(void* pointer) {
+#define FUNCTION CLIENT_THREAD
+  void *returned_value;
+
+  client_info_t *client;
+  client = (client_info_t*)pointer;
+
+  request_t request, *_request;
+  _request = &request;
+  if (receive_from(client->socket, (void**)&_request) == -1) { LOG_ERROR(); RETURN(NULL); }
+  status_t server_status;
+  if ((*(function_table[request]))(client) == 0) { printf("Success.\n"); server_status = S_SUCCESS; }
+  else { printf("Failure.\n"); server_status = S_FAILURE; }
+  if (send_to(client->socket, &server_status, sizeof(status_t)) == -1) { LOG_ERROR(); RETURN(NULL); }
+
+  RETURN(NULL);
+
+#undef FUNCTION
+FINALIZE_CLIENT_THREAD:
+  destroy_client_info(client);
+  pthread_mutex_lock(&info_lock);
+  int index;
+  index = array_find_reference(&clients, pointer);
+  array_delete(&clients, index); 
+  pthread_mutex_unlock(&info_lock);
+  return returned_value;
+}
+
+int upload(client_info_t *client) {
+#define FUNCTION UPLOAD
+  int returned_value;
+
+  char *_path = NULL;
+  char *path = NULL;
+  if (receive_from(client->socket, (void**)&_path) == -1) { LOG_ERROR(); RETURN(-1); }
+  asprintf(&path, "%s/%s", FOLDER, _path);
+  int fd;
+  if ((fd = open(path, O_CREAT | O_TRUNC | O_WRONLY, S_IRUSR | S_IWUSR)) < 0) { PERROR("open"); RETURN(-1); }
+  if (receive_file(client->socket, fd, O_TRUNC) == -1) { PERROR("open"); RETURN(-1); }
+  
+  RETURN(0);
+
+#undef FUNCTION
+FINALIZE_UPLOAD:
+  if (fd > 0) { close(fd); }
+  FREE(path);
+  FREE(_path);
+  return returned_value;
+}
+
+int download(client_info_t *client) {
+#define FUNCTION DOWNLOAD
+  int returned_value;
+
+  char *_path = NULL;
+  char *path = NULL;
+  if (receive_from(client->socket, (void**)&_path) == -1) { LOG_ERROR(); RETURN(-1); }
+  asprintf(&path, "%s/%s", FOLDER, _path);
+  int fd;
+  if ((fd = open(path, O_RDONLY, S_IRUSR)) < 0) { PERROR("open"); RETURN(-1); }
+  if (send_file(client->socket, fd) == -1) { PERROR("open"); RETURN(-1); }
+  printf("%s\n", _path);
+
+  RETURN(0);
+
+#undef FUNCTION
+FINALIZE_DOWNLOAD:
+  if (fd > 0) { close(fd); }
+  FREE(path);
+  FREE(_path);
+  return returned_value;
+}
+
+int execute(client_info_t *client) {
+#define FUNCTION EXECUTE
+  int returned_value;
+
+  char *cache_file = NULL;
+  asprintf(&cache_file, "%s/%ld%ld", CACHE, getpid(), pthread_self());
+
+  int argument_count;
+  char **arguments = NULL;
+  int *_argument_count;
+  _argument_count = &argument_count;
+  if (receive_from(client->socket, (void**)&_argument_count) == -1) { LOG_ERROR(); RETURN(-1); }
+  arguments = (char**)calloc(argument_count + 1, sizeof(char*));
+  int i;
+  for (i = 0; i != argument_count; i++) {
+    if (receive_from(client->socket, (void**)&(arguments[i])) == -1) { LOG_ERROR(); RETURN(-1); }
+  }
+  char *_command = NULL;
+  _command = join_strings(arguments, " ");
+  printf("%s\n", _command);
+  char *command;
+  asprintf(&command, "(cd storage; %s) > %s", _command, cache_file);
+  if (WEXITSTATUS(system(command)) != 0) { LOG_ERROR(); RETURN(-1); };
+  int fd = 0;
+  if ((fd = open(cache_file, O_RDONLY)) == -1) { LOG_ERROR(); RETURN(-1); }
+  if (send_file(client->socket, fd) == -1) { LOG_ERROR(); RETURN(-1); }
+
+  RETURN(0);
+
+#undef FUNCTION
+FINALIZE_EXECUTE:
+  FREE(command);
+  FREE(_command);
+  if (arguments != NULL) {
+    int i;
+    for (i = 0; i != argument_count; i++)
+      if (arguments[i] == NULL) { break; }
+      else { free(arguments[i]); }
+  }
+  if (fd != 0) { close(fd); remove(cache_file); }
+  FREE(cache_file);
+  return returned_value;
+}
+
 void cleanup() {
-  shutdown(socket_client, SHUT_RDWR);
-  close(socket_client);
+  if (!cleaned) {
+    shutdown(socket_connection, SHUT_RDWR);
+    close(socket_connection);
+    pthread_mutex_lock(&info_lock);
+    int i;
+    for (i = 0; i != clients.length; i++) {
+      destroy_client_info(&GET(client_info_t, clients, i));
+      free(clients.array[i]);
+    }
+    destroy_array(&clients);
+    pthread_mutex_unlock(&info_lock);
+    cleaned = 1;
+  }
+}
+
+void signal_cleanup(int signal) {
+  cleanup();
+  exit(0);
 }
