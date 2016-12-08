@@ -1,7 +1,10 @@
 /*
+ * TODO
  * server pressure test
- * client execute
+ * client default default execute
+ *
  */
+
 #include<arpa/inet.h>
 #include<errno.h>
 #include<fcntl.h>
@@ -36,6 +39,11 @@ int destroy_client_info(client_info_t *client) {
   if (client->socket > 0) {
     shutdown(client->socket, SHUT_RDWR);
     close(client->socket);
+    printf(
+      "disconnected from client %s:%d\n",
+      inet_ntoa(client->address.sin_addr),
+      client->address.sin_port
+    );
   }
   return 0;
 }
@@ -86,7 +94,7 @@ int main(int argc, char *argv[]) {
     pthread_mutex_unlock(&info_lock);
 
     printf(
-      "Connected to client %s:%d.\n",
+      "connected to client %s:%d\n",
       inet_ntoa(client->address.sin_addr),
       client->address.sin_port
     );
@@ -141,8 +149,8 @@ void* client_thread(void* pointer) {
   _request = &request;
   if (receive_from(client->socket, (void**)&_request) == -1) { LOG_ERROR(); RETURN(NULL); }
   status_t server_status;
-  if ((*(function_table[request]))(client) == 0) { printf("Success.\n"); server_status = S_SUCCESS; }
-  else { printf("Failure.\n"); server_status = S_FAILURE; }
+  if ((*(function_table[request]))(client) == 0) { server_status = S_SUCCESS; }
+  else { printf("error\n"); server_status = S_FAILURE; }
   if (send_to(client->socket, &server_status, sizeof(status_t)) == -1) { LOG_ERROR(); RETURN(NULL); }
 
   RETURN(NULL);
@@ -164,9 +172,10 @@ int upload(client_info_t *client) {
 
   char *_path = NULL;
   char *path = NULL;
+  int fd;
+
   if (receive_from(client->socket, (void**)&_path) == -1) { LOG_ERROR(); RETURN(-1); }
   asprintf(&path, "%s/%s", FOLDER, _path);
-  int fd;
   if ((fd = open(path, O_CREAT | O_TRUNC | O_WRONLY, S_IRUSR | S_IWUSR)) < 0) { PERROR("open"); RETURN(-1); }
   if (receive_file(client->socket, fd, O_TRUNC) == -1) { PERROR("open"); RETURN(-1); }
   
@@ -186,9 +195,10 @@ int download(client_info_t *client) {
 
   char *_path = NULL;
   char *path = NULL;
+  int fd;
+
   if (receive_from(client->socket, (void**)&_path) == -1) { LOG_ERROR(); RETURN(-1); }
   asprintf(&path, "%s/%s", FOLDER, _path);
-  int fd;
   if ((fd = open(path, O_RDONLY, S_IRUSR)) < 0) { PERROR("open"); RETURN(-1); }
   if (send_file(client->socket, fd) == -1) { PERROR("open"); RETURN(-1); }
   printf("%s\n", _path);
@@ -206,27 +216,26 @@ FINALIZE_DOWNLOAD:
 int execute(client_info_t *client) {
 #define FUNCTION EXECUTE
   int returned_value;
-
   char *cache_file = NULL;
+  int fd = 0;
+  char **arguments = NULL;
+  char *_command = NULL;
+  char *command = NULL;
+
   asprintf(&cache_file, "%s/%ld%ld", CACHE, getpid(), pthread_self());
 
-  int argument_count;
-  char **arguments = NULL;
-  int *_argument_count;
-  _argument_count = &argument_count;
+  int argument_count = 0;
+  int *_argument_count = &argument_count;
   if (receive_from(client->socket, (void**)&_argument_count) == -1) { LOG_ERROR(); RETURN(-1); }
   arguments = (char**)calloc(argument_count + 1, sizeof(char*));
   int i;
   for (i = 0; i != argument_count; i++) {
     if (receive_from(client->socket, (void**)&(arguments[i])) == -1) { LOG_ERROR(); RETURN(-1); }
   }
-  char *_command = NULL;
   _command = join_strings(arguments, " ");
   printf("%s\n", _command);
-  char *command;
   asprintf(&command, "(cd storage; %s) > %s", _command, cache_file);
-  if (WEXITSTATUS(system(command)) != 0) { LOG_ERROR(); RETURN(-1); };
-  int fd = 0;
+  system(command);
   if ((fd = open(cache_file, O_RDONLY)) == -1) { LOG_ERROR(); RETURN(-1); }
   if (send_file(client->socket, fd) == -1) { LOG_ERROR(); RETURN(-1); }
 

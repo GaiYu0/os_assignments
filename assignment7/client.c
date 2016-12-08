@@ -60,35 +60,27 @@ int connect_to_server(int argc, char *argv[], struct sockaddr_in *address_server
 }
 
 int main(int argc, char *argv[]) {
+  if (argc < 4) { printf("unrecongnized command\n"); exit(0); }
   initialize_client(argc, argv);
   struct sockaddr_in address_server;
   if (connect_to_server(argc, argv, &address_server) == 0) {
     printf(
-      "Connected to server %s:%d.\n",
+      "connected to server %s:%d\n",
       inet_ntoa(address_server.sin_addr),
       address_server.sin_port
     );
-  } else {
-    printf("Connection failure.\n");
-    exit(0);
-  }
+  } else { printf("cannot connect to server\n"); exit(0); }
   int status;
-  if (strcmp(argv[3], C_UPLOAD) == 0) {
-    status = upload(argc, argv);
-  } else if (strcmp(argv[3], C_DOWNLOAD) == 0) {
-    status = download(argc, argv);
-  } else if (strcmp(argv[3], C_EXECUTE) == 0) {
-    status = execute(argc, argv);
-  } else {
-    printf("Unrecongnized option.\n");
-    exit(0);
-  }
+  if (strcmp(argv[3], C_UPLOAD) == 0) { status = upload(argc, argv); }
+  else if (strcmp(argv[3], C_DOWNLOAD) == 0) { status = download(argc, argv); }
+  else if (strcmp(argv[3], C_EXECUTE) == 0) { status = execute(argc, argv); }
+  else { printf("unrecongnized command\n"); exit(0); }
 
-  if (status == 0) {
-    printf("Success.\n");
-  } else {
-    printf("Failure.\n");
-  }
+  int i;
+  for (i = 3; i != argc - 1; i++) { printf("%s ", argv[i]); }
+  printf("%s\n", argv[argc - 1]);
+
+  if (status != 0) { printf("error\n"); }
 
   return 0;
 }
@@ -161,6 +153,7 @@ int execute(int argc, char *argv[]) {
   
   int count;
   count = argc - 4;
+  if (count == 0) { return 0; }
   if (send_to(socket_client, &count, sizeof(int)) == -1) { LOG_ERROR(); return -1; }
   int i;
   size_t size;

@@ -4,8 +4,9 @@ do
   path="source/$file"
   echo $path
   cp server.c $path
-  ./client default default upload $path $file
+  ./client default default upload $path $file &
 done
+wait
 
 rm source/*
 
@@ -15,8 +16,9 @@ do
   path="source/$file"
   echo $path
   cp server.c $path
-  ./client default default download $file $path
+  ./client default default download $file $path &
 done
+wait
 
 #for ((i=0; i!=$1; i++))
 #do

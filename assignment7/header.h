@@ -1,8 +1,8 @@
 #include<stdio.h>
 
 // constants
-#define BUFFER_SIZE 1024
-#define SERVER_PORT 5121
+#define BUFFER_SIZE 1
+#define SERVER_PORT 5120
 #define MAXIMUM_PATH_SIZE 1024
 
 // server functionality
@@ -16,13 +16,6 @@ typedef int request_t;
 typedef int status_t;
 #define S_SUCCESS 0
 #define S_FAILURE 1
-#define S_DUPLICATE_FILE 2
-#define S_FILE_WRITING_FAILURE 3
-#define S_UPLOADING_INTERRUPTED 4
-#define S_INVALID_PATH 5
-
-// client status
-#define SERVICE_CANCELLED 0
 
 // dynamic array
 typedef struct array_t {
@@ -54,8 +47,6 @@ int send_file(int socket, int fd);
 int receive_file(int socket, int fd, int flags);
 
 char *join_strings(char **strings, char *delimiter);
-
-#define TIME_OUT 0
 
 #define FREE(pointer) if ((pointer) != NULL) { free(pointer); }
 

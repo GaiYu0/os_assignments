@@ -6,31 +6,21 @@
 
 #include<header.h>
 
-#define MAXIMUM_WAITING_TIME 360
+#define MAXIMUM_WAITING_TIME 3
 
 int _send_to(int fd, void *buffer, size_t size) {
-  int counter = 0;
-  int offset = 0;
-  int length;
+  size_t offset = 0;
+  size_t length;
   while (offset != size) {
-    if ((length = write(fd, buffer + offset, size)) == -1) {
-      PERROR("write");
-      return -1;
-    }
+    if ((length = write(fd, buffer + offset, size)) == -1) { PERROR("write"); return -1; }
     offset += length;
   }
   return 0;
 }
 
 int send_to(int fd, void *buffer, size_t size) {
-  if (_send_to(fd, &size, sizeof(size_t)) == -1) {
-    LOG_ERROR();
-    return -1;
-  }
-  if (_send_to(fd, buffer, size) == -1) {
-    LOG_ERROR();
-    return -1;
-  }
+  if (_send_to(fd, &size, sizeof(size_t)) == -1) { LOG_ERROR(); return -1; }
+  if (_send_to(fd, buffer, size) == -1) { LOG_ERROR(); return -1; }
   return 0;
 }
 
@@ -39,10 +29,7 @@ int _receive_from(int fd, void *buffer, size_t size) {
   int offset = 0;
   int length;
   while (offset != size) {
-    if ((length = read(fd, buffer + offset, size)) == -1) {
-      PERROR("read");
-      return -1;
-    }
+    if ((length = read(fd, buffer + offset, size)) == -1) { PERROR("read"); return -1; }
     offset += length;
     if (length == 0) {
       waiting_time *= 2;
@@ -99,10 +86,11 @@ int send_file(int socket, int fd) {
   void *buffer;
   buffer = malloc(BUFFER_SIZE);
   size_t length;
-  do {
-    if ((length = read(fd, buffer, BUFFER_SIZE)) == -1) { LOG_ERROR(); RETURN(-1); }
+  while (1) {
+    length = read(fd, buffer, BUFFER_SIZE);
+    if (length == 0) { break; } else if (length == -1) { LOG_ERROR(); RETURN(-1); }
     if (send_to(socket, buffer, length) == -1) { LOG_ERROR(); RETURN(-1); }
-  } while (length > 0);
+  }
 
   RETURN(0);
 
