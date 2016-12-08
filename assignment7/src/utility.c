@@ -78,7 +78,7 @@ char *join_strings(char **strings, char *delimiter) {
 int send_file(int socket, int fd) {
 #define FUNCTION SEND_FILE
   int returned_value;
-  void *buffer;
+  void *buffer = NULL;
 
   struct stat file_status;
   fstat(fd, &file_status);
@@ -96,7 +96,6 @@ int send_file(int socket, int fd) {
 
 #undef FUNCTION
 FINALIZE_SEND_FILE:
-  MARK();
   FREE(buffer);
   return returned_value;
 }
@@ -104,7 +103,7 @@ FINALIZE_SEND_FILE:
 int receive_file(int socket, int fd, int flags) {
 #define FUNCTION RECEIVE_FILE
   int returned_value;
-  void *buffer;
+  void *buffer = NULL;
 
   off_t file_size, *_file_size;
   _file_size = &file_size;

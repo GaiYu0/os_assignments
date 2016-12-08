@@ -1,8 +1,10 @@
 #include<arpa/inet.h>
+#include<dirent.h>
 #include<fcntl.h>
 #include<libgen.h>
 #include<netdb.h>
 #include<netinet/in.h>
+#include<pthread.h>
 #include<signal.h>
 #include<stdio.h>
 #include<stdlib.h>
@@ -22,8 +24,8 @@
 int CLIENT_ERROR;
 
 int socket_client;
+struct sockaddr_in address_server;
 int client_fd;
-int file_locked;
 
 int cleaned;
 void cleanup();
@@ -41,20 +43,19 @@ int initialize_client(int argc, char *argv[]) {
   return 0;
 }
 
-int connect_to_server(int argc, char *argv[], struct sockaddr_in *address_server) {
+int connect_to_server(int argc, char *argv[]) {
   if ((socket_client = socket(AF_INET, SOCK_STREAM, 0)) == -1) { PERROR("socket"); return -1; }
 
-  memset(address_server, 0, sizeof(struct sockaddr_in));
-  if (strcmp(argv[1], "default") == 0) { address_server->sin_addr.s_addr = htonl(INADDR_ANY); }
-  else { inet_aton(argv[1], &(address_server->sin_addr)); }
-  address_server->sin_family = AF_INET;
-  if (strcmp(argv[2], "default") == 0) { address_server->sin_port = htons(SERVER_PORT);
-  } else { address_server->sin_port = htons((short)atoi(argv[2])); }
+  memset(&address_server, 0, sizeof(struct sockaddr_in));
+  if (strcmp(argv[1], "default") == 0) { address_server.sin_addr.s_addr = htonl(INADDR_ANY); }
+  else { inet_aton(argv[1], &(address_server.sin_addr)); }
+  address_server.sin_family = AF_INET;
+  if (strcmp(argv[2], "default") == 0) { address_server.sin_port = htons(SERVER_PORT);
+  } else { address_server.sin_port = htons((short)atoi(argv[2])); }
 
-  if (connect(socket_client, (struct sockaddr*)address_server, (socklen_t)sizeof(struct sockaddr_in)) == -1) {
-    PERROR("connect");
-    return -1;
-  }
+  if (
+    connect(socket_client, (struct sockaddr*)&address_server, (socklen_t)sizeof(struct sockaddr_in)) == -1
+  ) { PERROR("connect"); return -1; }
 
   return 0;
 }
@@ -62,8 +63,7 @@ int connect_to_server(int argc, char *argv[], struct sockaddr_in *address_server
 int main(int argc, char *argv[]) {
   if (argc < 5) { printf("unrecongnized command\n"); exit(0); }
   initialize_client(argc, argv);
-  struct sockaddr_in address_server;
-  if (connect_to_server(argc, argv, &address_server) == 0) {
+  if (connect_to_server(argc, argv) == 0) {
     printf(
       "connected to server %s:%d\n",
       inet_ntoa(address_server.sin_addr),
@@ -85,31 +85,106 @@ int main(int argc, char *argv[]) {
   return 0;
 }
 
-int upload(int argc, char *argv[]) {
+typedef struct uploading_session {
+  int fd, socket;
+  char *path;
+  pthread_t tid;
+} uploading_session_t;
+
+uploading_session_t *uploading_sessions = NULL;
+
+void *_upload(void *pointer) {
+  uploading_session_t *session = (uploading_session_t*)pointer;
   request_t request = S_UPLOAD;
-  if (send_to(socket_client, &request, sizeof(request_t)) == -1) { LOG_ERROR(); return -1; }
+  if (send_to(session->socket, &request, sizeof(request_t)) == -1) { LOG_ERROR(); return (void*)1; }
+  size_t path_size = (strlen(session->path) + 1) * sizeof(char);
+  if (send_to(session->socket, session->path, path_size) == -1) { LOG_ERROR(); return (void*)1; }
+  if (send_file(session->socket, session->fd) == -1) { LOG_ERROR(); return (void*)1; }
+  return 0;
+}
 
-  if ((client_fd = open(argv[4], O_RDONLY)) == -1) { PERROR("open"); return -1; }
+int upload(int argc, char *argv[]) {
+#define FUNCTION UPLOAD
+  int returned_value;
 
-  if (flock(client_fd, LOCK_EX) == -1) { PERROR("flock"); return -1; }
-  file_locked = 1;
-
-  size_t path_size;
-  path_size = (strlen(argv[5]) + 1) * sizeof(char);
-  if (send_to(socket_client, argv[5], path_size) == -1) { LOG_ERROR(); return -1; }
-
-  void *buffer;
-  buffer = malloc(BUFFER_SIZE);
-
+  int n_files = 0;
+  char **files = NULL;
+  char *file_name = NULL;
+  int fd = 0;
+  int i = 0;
+  if ((fd = open(argv[4], O_RDONLY)) == -1) { PERROR("open"); RETURN(-1); }
   struct stat file_status;
-  fstat(client_fd, &file_status);
-  if (send_file(socket_client, client_fd) == -1) { LOG_ERROR(); return -1; }
+  if (fstat(fd, &file_status) == -1) { PERROR("fstat"); RETURN(-1); }
+  if (S_ISDIR(file_status.st_mode)) {
+    DIR *directory;
+    if ((directory = opendir(argv[4])) == NULL) { PERROR("opendir"); RETURN(-1); }
+    struct dirent *entry;
+    while ((entry = readdir(directory)) != NULL)
+      if (entry->d_type == DT_REG) { n_files++; }
+    if (n_files == 0) { RETURN(0); }
+    files = (char**)calloc(n_files, sizeof(char*));
+    rewinddir(directory);
+    while ((entry = readdir(directory)) != NULL)
+      if (entry->d_type == DT_REG) { MARK(); asprintf(files + i, "%s", entry->d_name); }
+  } else { n_files = 1; asprintf(files, "%s", argv[4]); }
 
-  status_t server_status, *_server_status;
-  _server_status = &server_status;
-  if (receive_from(socket_client, (void**)&_server_status) == -1) { LOG_ERROR(); return -1; }
-  if (server_status == S_SUCCESS) { return 0; }
-  else { return -1; }
+  for (i = 0; i != n_files; i++) {
+    printf("%s\n", files[i]);
+  }
+  uploading_sessions = (uploading_session_t*)malloc(n_files * sizeof(uploading_session_t));
+  for (i = 0; i != n_files; i++) {
+    uploading_sessions[i].path = files[i];
+    asprintf(&file_name, "%s/%s", argv[4], files[i]);
+    printf("%s\n", file_name);
+    if ((uploading_sessions[i].fd = open(file_name, O_RDONLY)) == -1) { PERROR("open"); RETURN(-1); }
+    if ((uploading_sessions[i].socket = socket(AF_INET, SOCK_STREAM, 0)) == -1) { PERROR("socket"); return -1; }
+    if (
+      connect(
+        uploading_sessions[i].socket,
+        (struct sockaddr*)&address_server,
+        (socklen_t)sizeof(struct sockaddr_in)
+      ) == -1
+    ) { PERROR("connect"); RETURN(-1); }
+    MARK();
+  }
+
+  for (i = 0; i != n_files; i++) {
+    if (
+      pthread_create(&(uploading_sessions[i].tid), NULL, &_upload, uploading_sessions + i) != 0
+    ) { LOG_ERROR(); RETURN(-1); }
+  }
+  MARK();
+
+  long status, global_status;
+  for (i = 0, global_status = 1; i != n_files; i++) {
+    pthread_join(uploading_sessions[i].tid, (void**)&status);
+    if (status == 1) { global_status = 0; }
+  }
+  MARK();
+
+  if (global_status) { RETURN(0); }
+  else { RETURN(-1); }
+
+#undef FUNCTION
+FINALIZE_UPLOAD:
+  FREE(file_name);
+  if (fd > 0) close(fd);
+  if (files != NULL)
+    for (i = 0; i != n_files; i++) {
+      if (files[i] != NULL) free(files[i]);
+      else break;
+    }
+  FREE(files);
+  if (uploading_sessions != NULL)
+    for (i = 0; i != n_files; i++) {
+      if (uploading_sessions[i].socket > 0) {
+        shutdown(uploading_sessions[i].socket, SHUT_RDWR);
+        close(uploading_sessions[i].socket);
+      }
+      if (uploading_sessions[i].fd > 0) { close(uploading_sessions[i].fd); }
+    }
+  FREE(uploading_sessions);
+  return returned_value;
 }
 
 int download(int argc, char *argv[]) {
@@ -141,12 +216,6 @@ int execute(int argc, char *argv[]) {
 
   if (receive_file(socket_client, STDOUT_FILENO, 0) == -1) { LOG_ERROR(); return -1; }
 
-  status_t server_status, *_server_status;
-  _server_status = &server_status;
-  if (receive_from(socket_client, (void**)&_server_status) == -1) { LOG_ERROR(); return -1; }
-  if (server_status == S_SUCCESS) { return 0; }
-  else { printf("%d\n", server_status); return -1; }
-
   return 0;
 }
 
@@ -156,7 +225,6 @@ void cleanup() {
       shutdown(socket_client, SHUT_RDWR);
       close(socket_client);
     }
-    if (file_locked) { flock(client_fd, LOCK_UN); }
     if (client_fd > 0) {
       close(client_fd);
     }

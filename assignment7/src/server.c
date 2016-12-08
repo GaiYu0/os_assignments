@@ -20,8 +20,10 @@
 
 #include<header.h>
 
-#define CACHE "cache"
-#define FOLDER "storage"
+#define TMP "tmp"
+#define STORAGE "file"
+
+char *storage = STORAGE;
 
 typedef struct client_info {
   int socket;
@@ -73,11 +75,12 @@ server_function function_table[N_S_FUNCTIONALITY] = {
 int initialize_server(int argc, char *argv[]);
 
 int main(int argc, char *argv[]) {
+  if (argc == 3) { storage = argv[2]; }
   if (initialize_server(argc, argv) == -1) {
     printf("Initialization failed.\n");
     exit(0);
   }
-
+  
   client_info_t *client;
   pthread_t tid;
   while (1) {
@@ -130,11 +133,11 @@ int initialize_server(int argc, char *argv[]) {
   if (listen(socket_connection, 4) == -1) { LOG_ERROR(); return -1; }
 
   struct stat status;
-  if ((stat(CACHE, &status) != 0) || (!S_ISDIR(status.st_mode))) {
-    if (mkdir(CACHE, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) == -1) { LOG_ERROR(); return -1; }
+  if ((stat(TMP, &status) != 0) || (!S_ISDIR(status.st_mode))) {
+    if (mkdir(TMP, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) == -1) { LOG_ERROR(); return -1; }
   }
-  if ((stat(FOLDER, &status) != 0) || (!S_ISDIR(status.st_mode))) {
-    if (mkdir(FOLDER, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) == -1) { LOG_ERROR(); return -1; }
+  if ((stat(storage, &status) != 0) || (!S_ISDIR(status.st_mode))) {
+    if (mkdir(storage, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) == -1) { LOG_ERROR(); return -1; }
   }
 
   return 0;
@@ -150,11 +153,7 @@ void* client_thread(void* pointer) {
   request_t request, *_request;
   _request = &request;
   if (receive_from(client->socket, (void**)&_request) == -1) { LOG_ERROR(); RETURN(NULL); }
-  status_t server_status;
-  if ((*(function_table[request]))(client) == 0) { server_status = S_SUCCESS; }
-  else { printf("error\n"); server_status = S_FAILURE; }
-  if (send_to(client->socket, &server_status, sizeof(status_t)) == -1) { LOG_ERROR(); RETURN(NULL); }
-
+  if ((*(function_table[request]))(client) != 0) { printf("error\n"); }
   RETURN(NULL);
 
 #undef FUNCTION
@@ -175,9 +174,9 @@ int upload(client_info_t *client) {
   char *_path = NULL;
   char *path = NULL;
   int fd;
-
+  if (flock(fd, LOCK_EX) == -1) { LOG_ERROR(); RETURN(-1); }
   if (receive_from(client->socket, (void**)&_path) == -1) { LOG_ERROR(); RETURN(-1); }
-  asprintf(&path, "%s/%s", FOLDER, _path);
+  asprintf(&path, "%s/%s", storage, _path);
   if ((fd = open(path, O_CREAT | O_TRUNC | O_WRONLY, S_IRUSR | S_IWUSR)) < 0) { PERROR("open"); RETURN(-1); }
   if (receive_file(client->socket, fd, O_TRUNC) == -1) { PERROR("open"); RETURN(-1); }
   
@@ -185,7 +184,7 @@ int upload(client_info_t *client) {
 
 #undef FUNCTION
 FINALIZE_UPLOAD:
-  if (fd > 0) { close(fd); }
+  if (fd > 0) { flock(fd, LOCK_UN); close(fd); }
   FREE(path);
   FREE(_path);
   return returned_value;
@@ -200,7 +199,7 @@ int download(client_info_t *client) {
   int fd;
 
   if (receive_from(client->socket, (void**)&_path) == -1) { LOG_ERROR(); RETURN(-1); }
-  asprintf(&path, "%s/%s", FOLDER, _path);
+  asprintf(&path, "%s/%s", storage, _path);
   if ((fd = open(path, O_RDONLY, S_IRUSR)) < 0) { PERROR("open"); RETURN(-1); }
   if (send_file(client->socket, fd) == -1) { PERROR("open"); RETURN(-1); }
   printf("%s\n", _path);
@@ -224,7 +223,7 @@ int execute(client_info_t *client) {
   char *_command = NULL;
   char *command = NULL;
 
-  asprintf(&cache_file, "%s/%ld%ld", CACHE, getpid(), pthread_self());
+  asprintf(&cache_file, "%s/%ld%ld", TMP, getpid(), pthread_self());
 
   int argument_count = 0;
   int *_argument_count = &argument_count;
@@ -236,7 +235,7 @@ int execute(client_info_t *client) {
   }
   _command = join_strings(arguments, " ");
   printf("%s\n", _command);
-  asprintf(&command, "(cd storage; %s) > %s", _command, cache_file);
+  asprintf(&command, "(cd %s; %s) > %s", storage, _command, cache_file);
   system(command);
   if ((fd = open(cache_file, O_RDONLY)) == -1) { LOG_ERROR(); RETURN(-1); }
   if (send_file(client->socket, fd) == -1) { LOG_ERROR(); RETURN(-1); }

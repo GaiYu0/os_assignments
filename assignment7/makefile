@@ -9,8 +9,8 @@ array:
 utility:
 	gcc -o ${OBJ}/utility ${SRC}/utility.c -c -I${INC}
 client: utility
-	gcc -o ${OBJ}/client ${SRC}/client.c -c -I${INC}
-	gcc -o ${BIN}/client ${OBJ}/client ${OBJ}/utility -I${INC}
+	gcc -o ${OBJ}/client ${SRC}/client.c -c -I${INC} -lpthread
+	gcc -o ${BIN}/client ${OBJ}/client ${OBJ}/utility -I${INC} -lpthread
 server:	clean array utility
 	gcc -o ${OBJ}/server ${SRC}/server.c -c -lpthread -I${INC} -D_REENTRANT
 	gcc -o ${BIN}/server ${OBJ}/server ${OBJ}/array ${OBJ}/utility -lpthread -I${INC}
