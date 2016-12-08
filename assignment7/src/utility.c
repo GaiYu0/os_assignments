@@ -78,12 +78,12 @@ char *join_strings(char **strings, char *delimiter) {
 int send_file(int socket, int fd) {
 #define FUNCTION SEND_FILE
   int returned_value;
+  void *buffer;
 
   struct stat file_status;
   fstat(fd, &file_status);
   if (send_to(socket, &(file_status.st_size), sizeof(off_t)) == -1) { LOG_ERROR(); RETURN(-1); }
 
-  void *buffer;
   buffer = malloc(BUFFER_SIZE);
   size_t length;
   while (1) {
@@ -95,8 +95,8 @@ int send_file(int socket, int fd) {
   RETURN(0);
 
 #undef FUNCTION
-
 FINALIZE_SEND_FILE:
+  MARK();
   FREE(buffer);
   return returned_value;
 }
@@ -104,6 +104,7 @@ FINALIZE_SEND_FILE:
 int receive_file(int socket, int fd, int flags) {
 #define FUNCTION RECEIVE_FILE
   int returned_value;
+  void *buffer;
 
   off_t file_size, *_file_size;
   _file_size = &file_size;
@@ -113,7 +114,7 @@ int receive_file(int socket, int fd, int flags) {
   }
 
   size_t length;
-  void *buffer = malloc(BUFFER_SIZE);
+  buffer = malloc(BUFFER_SIZE);
   while (file_size != 0) {
     if ((length = receive_from(socket, &buffer)) == -1) { LOG_ERROR(); RETURN(-1); }
     if (write(fd, buffer, length) == -1) { LOG_ERROR(); RETURN(-1); }
@@ -123,7 +124,6 @@ int receive_file(int socket, int fd, int flags) {
   RETURN(0);
 
 #undef FUNCTION
-
 FINALIZE_RECEIVE_FILE:
   FREE(buffer);
   return returned_value;

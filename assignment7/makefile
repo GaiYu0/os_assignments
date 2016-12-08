@@ -1,15 +1,18 @@
-INCLUDE=-I.
-all: clean server client
+BIN=bin
+INC=inc
+OBJ=obj
+SRC=src
 
+all: clean client server
 array:
-	gcc -o object/array dynamic_array.c -c ${INCLUDE}
-client:
-	gcc -o object/client client.c -c ${INCLUDE}
-	gcc -o client object/client object/utility ${INCLUDE}
-server:	clean array utility
-	gcc -o object/server server.c -c -lpthread ${INCLUDE} -D_REENTRANT
-	gcc -o server object/server object/array object/utility -lpthread ${INCLUDE}
+	gcc -o ${OBJ}/array ${SRC}/dynamic_array.c -c -I${INC}
 utility:
-	gcc -o object/utility utility.c -c ${INCLUDE}
+	gcc -o ${OBJ}/utility ${SRC}/utility.c -c -I${INC}
+client: utility
+	gcc -o ${OBJ}/client ${SRC}/client.c -c -I${INC}
+	gcc -o ${BIN}/client ${OBJ}/client ${OBJ}/utility -I${INC}
+server:	clean array utility
+	gcc -o ${OBJ}/server ${SRC}/server.c -c -lpthread -I${INC} -D_REENTRANT
+	gcc -o ${BIN}/server ${OBJ}/server ${OBJ}/array ${OBJ}/utility -lpthread -I${INC}
 clean:
-	rm -f ./server ./client ./array-test ./object/*
+	rm -f ${BIN}/* ${OBJ}/*

@@ -1,7 +1,6 @@
 /*
  * TODO
  * server pressure test
- * client default default execute
  *
  */
 
@@ -56,6 +55,7 @@ pthread_mutex_t info_lock = PTHREAD_MUTEX_INITIALIZER;
 int cleaned;
 void cleanup();
 void signal_cleanup(int signal);
+void default_handler(int signal);
 
 void* client_thread(void*);
 
@@ -106,6 +106,8 @@ int initialize_server(int argc, char *argv[]) {
   struct sigaction action;
   action.sa_handler = &signal_cleanup;
   sigaction(SIGINT, &action, NULL);
+  action.sa_handler = SIG_IGN;
+  sigaction(SIGPIPE, &action, NULL);
 
   atexit(&cleanup);
 
@@ -118,12 +120,12 @@ int initialize_server(int argc, char *argv[]) {
   if (argc == 2) { address_server.sin_port = htons(atoi(argv[1])); }
   else { address_server.sin_port = htons(SERVER_PORT); }
 
+  int reuse = 1;
+  if (setsockopt(socket_connection, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(int)) == -1) { LOG_ERROR(); return -1; }
+
   if (
     bind(socket_connection, (struct sockaddr*)(&address_server), (socklen_t)sizeof(struct sockaddr_in)) == -1
   ) { LOG_ERROR(); return -1; }
-
-  int reuse = 1;
-  if (setsockopt(socket_connection, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(int)) == -1) { LOG_ERROR(); return -1; }
 
   if (listen(socket_connection, 4) == -1) { LOG_ERROR(); return -1; }
 
@@ -275,4 +277,7 @@ void cleanup() {
 void signal_cleanup(int signal) {
   cleanup();
   exit(0);
+}
+
+void default_handler(int signal) {
 }

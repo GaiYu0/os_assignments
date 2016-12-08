@@ -1,26 +1,17 @@
 for ((i=0; i!=$1; i++))
 do
-  file="server$i.c"
-  path="source/$file"
-  echo $path
-  cp server.c $path
-  ./client default default upload $path $file &
+  file="makefile$i"
+  cp makefile test/$file
+  bin/client default default upload makefile $file &
+  bin/client default default execute ls
 done
 wait
 
-rm source/*
+rm test/*
 
 for ((i=0; i!=$1; i++))
 do
-  file="server$i.c"
-  path="source/$file"
-  echo $path
-  cp server.c $path
-  ./client default default download $file $path &
+  file="makefile$i"
+  bin/client default default download $file test/$file &
 done
 wait
-
-#for ((i=0; i!=$1; i++))
-#do
-#  ./client default default execute ls
-#done

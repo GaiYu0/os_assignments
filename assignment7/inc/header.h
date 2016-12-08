@@ -1,5 +1,7 @@
 #include<stdio.h>
 
+#define DEBUG
+
 // constants
 #define BUFFER_SIZE 1
 #define SERVER_PORT 5120
@@ -50,11 +52,20 @@ char *join_strings(char **strings, char *delimiter);
 
 #define FREE(pointer) if ((pointer) != NULL) { free(pointer); }
 
+#ifdef DEBUG
 #define PERROR(message) \
   perror((message)); \
   printf("%s %d: %s\n", __FILE__, __LINE__, __func__)
+#else
+#define PERROR(message) ;
+#endif
 
+#ifdef DEBUG
 #define LOG_ERROR() printf("%s %d: %s\n", __FILE__, __LINE__, __func__)
+#else
+#define LOG_ERROR() ;
+#endif
+
 #define MARK() printf("%s %d: %s\n", __FILE__, __LINE__, __func__)
 
 #define FINALIZER(FUNCTION) CONCATENATE(FINALIZE_, FUNCTION)

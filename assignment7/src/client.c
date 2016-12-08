@@ -60,7 +60,7 @@ int connect_to_server(int argc, char *argv[], struct sockaddr_in *address_server
 }
 
 int main(int argc, char *argv[]) {
-  if (argc < 4) { printf("unrecongnized command\n"); exit(0); }
+  if (argc < 5) { printf("unrecongnized command\n"); exit(0); }
   initialize_client(argc, argv);
   struct sockaddr_in address_server;
   if (connect_to_server(argc, argv, &address_server) == 0) {
@@ -103,16 +103,7 @@ int upload(int argc, char *argv[]) {
 
   struct stat file_status;
   fstat(client_fd, &file_status);
-  if (send_to(socket_client, &(file_status.st_size), sizeof(off_t)) == -1) { LOG_ERROR(); return -1; }
-
-  size_t length;
-  off_t file_size;
-  file_size = file_status.st_size;
-  do {
-    if ((length = read(client_fd, buffer, BUFFER_SIZE)) == -1) { LOG_ERROR(); return -1; }
-    file_size -= length;
-    if (send_to(socket_client, buffer, length) == -1) { LOG_ERROR(); return -1; }
-  } while (length != 0);
+  if (send_file(socket_client, client_fd) == -1) { LOG_ERROR(); return -1; }
 
   status_t server_status, *_server_status;
   _server_status = &server_status;
@@ -128,21 +119,8 @@ int download(int argc, char *argv[]) {
   size_t path_size;
   path_size = (strlen(argv[4]) + 1) * sizeof(char);
   if (send_to(socket_client, argv[4], path_size) == -1) { LOG_ERROR(); return -1; }
-
   if ((client_fd = open(argv[5], O_WRONLY, S_IWUSR)) == -1) { LOG_ERROR(); return -1; }
-  
-  size_t file_size, *_file_size;
-  _file_size = &file_size;
-  if (receive_from(socket_client, (void**)&_file_size) == -1) { LOG_ERROR(); return -1; }
-  if (ftruncate(client_fd, file_size) == -1) { LOG_ERROR(); return -1; }
-  size_t length;
-  void *buffer;
-  buffer = malloc(BUFFER_SIZE);
-  while (file_size != 0) {
-    if ((length = receive_from(socket_client, &buffer)) == -1) { LOG_ERROR(); return -1; }
-    if (write(client_fd, buffer, length) == -1) { LOG_ERROR(); return -1; }
-    file_size -= length;
-  }
+  if (receive_file(socket_client, client_fd, O_TRUNC) == -1) { LOG_ERROR(); return -1; }
 
   return 0;
 }
@@ -153,7 +131,6 @@ int execute(int argc, char *argv[]) {
   
   int count;
   count = argc - 4;
-  if (count == 0) { return 0; }
   if (send_to(socket_client, &count, sizeof(int)) == -1) { LOG_ERROR(); return -1; }
   int i;
   size_t size;
