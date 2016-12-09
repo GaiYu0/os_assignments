@@ -25,7 +25,6 @@ int CLIENT_ERROR;
 
 int socket_client;
 struct sockaddr_in address_server;
-int client_fd;
 
 int cleaned;
 void cleanup();
@@ -125,17 +124,14 @@ int upload(int argc, char *argv[]) {
     files = (char**)calloc(n_files, sizeof(char*));
     rewinddir(directory);
     while ((entry = readdir(directory)) != NULL)
-      if (entry->d_type == DT_REG) { MARK(); asprintf(files + i, "%s", entry->d_name); }
+      if (entry->d_type == DT_REG) { asprintf(files + (i++), "%s", entry->d_name); }
   } else { n_files = 1; asprintf(files, "%s", argv[4]); }
 
-  for (i = 0; i != n_files; i++) {
-    printf("%s\n", files[i]);
-  }
   uploading_sessions = (uploading_session_t*)malloc(n_files * sizeof(uploading_session_t));
   for (i = 0; i != n_files; i++) {
     uploading_sessions[i].path = files[i];
+    FREE(file_name);
     asprintf(&file_name, "%s/%s", argv[4], files[i]);
-    printf("%s\n", file_name);
     if ((uploading_sessions[i].fd = open(file_name, O_RDONLY)) == -1) { PERROR("open"); RETURN(-1); }
     if ((uploading_sessions[i].socket = socket(AF_INET, SOCK_STREAM, 0)) == -1) { PERROR("socket"); return -1; }
     if (
@@ -145,7 +141,6 @@ int upload(int argc, char *argv[]) {
         (socklen_t)sizeof(struct sockaddr_in)
       ) == -1
     ) { PERROR("connect"); RETURN(-1); }
-    MARK();
   }
 
   for (i = 0; i != n_files; i++) {
@@ -153,14 +148,12 @@ int upload(int argc, char *argv[]) {
       pthread_create(&(uploading_sessions[i].tid), NULL, &_upload, uploading_sessions + i) != 0
     ) { LOG_ERROR(); RETURN(-1); }
   }
-  MARK();
 
   long status, global_status;
   for (i = 0, global_status = 1; i != n_files; i++) {
     pthread_join(uploading_sessions[i].tid, (void**)&status);
     if (status == 1) { global_status = 0; }
   }
-  MARK();
 
   if (global_status) { RETURN(0); }
   else { RETURN(-1); }
@@ -186,18 +179,105 @@ FINALIZE_UPLOAD:
   FREE(uploading_sessions);
   return returned_value;
 }
+ 
+typedef struct downloading_session {
+  int fd, socket;
+  char *path;
+  pthread_t tid;
+} downloading_session_t;
+
+downloading_session_t *downloading_sessions = NULL;
+
+void *_download(void *pointer) {
+  downloading_session_t *session = (downloading_session_t*)pointer;
+  request_t request = S_DOWNLOAD;
+  if (send_to(session->socket, &request, sizeof(request_t)) == -1) { LOG_ERROR(); return (void*)1; }
+  size_t path_size = (strlen(session->path) + 1) * sizeof(char);
+  if (send_to(session->socket, session->path, path_size) == -1) { LOG_ERROR(); return (void*)1; }
+  int n_files;
+  if (receive_from(session->socket, (void**)&n_files) == -1) { LOG_ERROR(); return (void*)1; }
+  if (n_files != -1) { LOG_ERROR(); return (void*)1; }
+  if (receive_file(session->socket, session->fd, O_TRUNC) == -1) { LOG_ERROR(); return (void*)1; }
+  return 0;
+}
 
 int download(int argc, char *argv[]) {
-  request_t request = S_DOWNLOAD;
-  if (send_to(socket_client, &request, sizeof(request_t)) == -1) { LOG_ERROR(); return -1; }
+#define FUNCTION UPLOAD
+  int returned_value;
 
-  size_t path_size;
-  path_size = (strlen(argv[4]) + 1) * sizeof(char);
-  if (send_to(socket_client, argv[4], path_size) == -1) { LOG_ERROR(); return -1; }
-  if ((client_fd = open(argv[5], O_WRONLY, S_IWUSR)) == -1) { LOG_ERROR(); return -1; }
-  if (receive_file(socket_client, client_fd, O_TRUNC) == -1) { LOG_ERROR(); return -1; }
+  int n_files = 0;
+  int *_n_files = &n_files;
+  char **files = NULL;
+  char *file_name = NULL;
+  int fd = 0;
+  int i = 0; 
 
-  return 0;
+  size_t path_size = (strlen(argv[4]) + 1) * sizeof(char);
+  if (send_to(socket_client, argv[4], path_size) == -1) { LOG_ERROR(); RETURN(-1); }
+  if (receive_from(socket_client, (void**)&_n_files) == -1) { LOG_ERROR(); RETURN(-1); }
+  switch (n_files) {
+    case -1:
+      if ((fd = open(argv[4], O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR)) == -1) { PERROR("open"); RETURN(-1); }
+      if (receive_file(socket_client, fd, O_TRUNC) == -1) { LOG_ERROR(); RETURN(-1); }
+      RETURN(0);
+    case 0:
+      RETURN(0);
+    default:
+      files = (char**)calloc(n_files, sizeof(char*));
+      downloading_sessions = (downloading_session_t*)malloc(n_files * sizeof(downloading_session_t));
+      for (i = 0; i != n_files; i++) {
+        if (receive_from(socket_client, (void**)(files + i)) == -1) { LOG_ERROR(); RETURN(-1); }
+        asprintf(&(downloading_sessions[i].path), "%s/%s", argv[4], files[i]);
+        if (
+          (downloading_sessions[i].fd = open(files[i], O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR)) == -1
+        ) { PERROR("open"); RETURN(-1); }
+        if ((downloading_sessions[i].socket = socket(AF_INET, SOCK_STREAM, 0)) == -1) { PERROR("socket"); return -1; }
+        if (
+          connect(
+            downloading_sessions[i].socket,
+            (struct sockaddr*)&address_server,
+            (socklen_t)sizeof(struct sockaddr_in)
+          ) == -1
+        ) { PERROR("connect"); RETURN(-1); }
+      }
+
+      for (i = 0; i != n_files; i++) {
+        if (
+          pthread_create(&(downloading_sessions[i].tid), NULL, &_download, downloading_sessions + i) != 0
+        ) { LOG_ERROR(); RETURN(-1); }
+      }
+
+      long status, global_status;
+      for (i = 0, global_status = 1; i != n_files; i++) {
+        pthread_join(downloading_sessions[i].tid, (void**)&status);
+        if (status == 1) { global_status = 0; }
+      }
+
+      if (global_status) { RETURN(0); }
+      else { RETURN(-1); }
+  }
+
+#undef FUNCTION
+FINALIZE_UPLOAD:
+  FREE(file_name);
+  if (fd > 0) close(fd);
+  if (files != NULL)
+    for (i = 0; i != n_files; i++) {
+      if (files[i] != NULL) free(files[i]);
+      else break;
+    }
+  FREE(files);
+  if (downloading_sessions != NULL)
+    for (i = 0; i != n_files; i++) {
+      if (downloading_sessions[i].socket > 0) {
+        shutdown(downloading_sessions[i].socket, SHUT_RDWR);
+        close(downloading_sessions[i].socket);
+      }
+      if (downloading_sessions[i].fd > 0) { close(downloading_sessions[i].fd); }
+      FREE(downloading_sessions[i].path);
+    }
+  FREE(downloading_sessions);
+  return returned_value;
 }
 
 int execute(int argc, char *argv[]) {
@@ -224,9 +304,6 @@ void cleanup() {
     if (socket_client > 0) {
       shutdown(socket_client, SHUT_RDWR);
       close(socket_client);
-    }
-    if (client_fd > 0) {
-      close(client_fd);
     }
   }
 }

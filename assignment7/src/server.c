@@ -5,6 +5,7 @@
  */
 
 #include<arpa/inet.h>
+#include<dirent.h>
 #include<errno.h>
 #include<fcntl.h>
 #include<netinet/in.h>
@@ -174,7 +175,6 @@ int upload(client_info_t *client) {
   char *_path = NULL;
   char *path = NULL;
   int fd;
-  if (flock(fd, LOCK_EX) == -1) { LOG_ERROR(); RETURN(-1); }
   if (receive_from(client->socket, (void**)&_path) == -1) { LOG_ERROR(); RETURN(-1); }
   asprintf(&path, "%s/%s", storage, _path);
   if ((fd = open(path, O_CREAT | O_TRUNC | O_WRONLY, S_IRUSR | S_IWUSR)) < 0) { PERROR("open"); RETURN(-1); }
@@ -184,7 +184,7 @@ int upload(client_info_t *client) {
 
 #undef FUNCTION
 FINALIZE_UPLOAD:
-  if (fd > 0) { flock(fd, LOCK_UN); close(fd); }
+  if (fd > 0) { close(fd); }
   FREE(path);
   FREE(_path);
   return returned_value;
@@ -196,18 +196,42 @@ int download(client_info_t *client) {
 
   char *_path = NULL;
   char *path = NULL;
-  int fd;
+  int fd = 0;
+  char *entry_path;
 
   if (receive_from(client->socket, (void**)&_path) == -1) { LOG_ERROR(); RETURN(-1); }
   asprintf(&path, "%s/%s", storage, _path);
   if ((fd = open(path, O_RDONLY, S_IRUSR)) < 0) { PERROR("open"); RETURN(-1); }
-  if (send_file(client->socket, fd) == -1) { PERROR("open"); RETURN(-1); }
-  printf("%s\n", _path);
+  struct stat status;
+  if (fstat(fd, &status) == -1) { PERROR("fstat"); RETURN(-1); }
+  int n_files = 0;
+  if (S_ISDIR(status.st_mode)) {
+    DIR *directory;
+    if ((directory = opendir(path)) == NULL) { PERROR("opendir"); RETURN(-1); }
+    struct dirent *entry;
+    while ((entry = readdir(directory)) != NULL)
+      if (entry->d_type == DT_REG) { n_files++; }
+    if (send_to(client->socket, &n_files, sizeof(int)) == -1) { LOG_ERROR(); RETURN(-1); }
+    if (n_files == 0) { RETURN(0); }
+    rewinddir(directory);
+    size_t path_size;
+    while ((entry = readdir(directory)) != NULL)
+      if (entry->d_type == DT_REG) {
+        asprintf(&entry_path, "%s/%s", _path, entry->d_name);
+        path_size = (strlen(entry_path) + 1) * sizeof(char);
+        if (send_to(client->socket, entry_path, path_size) == -1) { LOG_ERROR(); RETURN(-1); }
+      }
+  } else {
+    n_files = -1;
+    if (send_to(client->socket, &n_files, sizeof(int)) == -1) { LOG_ERROR(); RETURN(-1); }
+    if (send_file(client->socket, fd) == -1) { PERROR("open"); RETURN(-1); }
+  }
 
   RETURN(0);
 
 #undef FUNCTION
 FINALIZE_DOWNLOAD:
+  FREE(entry_path);
   if (fd > 0) { close(fd); }
   FREE(path);
   FREE(_path);
