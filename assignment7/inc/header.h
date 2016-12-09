@@ -42,6 +42,16 @@ int array_find_reference(array_t*, void*);
   int __status__; \
   __status__ = array_append(&(array), __pointer__)
 
+// file lock
+int construct_global_file_lock();
+int destroy_global_file_lock();
+int construct_file_lock(char *path);
+int destroy_file_lock(char *path);
+int ropen(char *path, int flags, mode_t mode);
+int rclose(char *path);
+int wopen(char *path, int flags, mode_t mode);
+int wclose(char *path);
+
 // utilities
 int send_to(int fd, void *buffer, size_t size);
 int receive_from(int fd, void **buffer);

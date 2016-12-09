@@ -201,7 +201,8 @@ int download(client_info_t *client) {
 
   if (receive_from(client->socket, (void**)&_path) == -1) { LOG_ERROR(); RETURN(-1); }
   asprintf(&path, "%s/%s", storage, _path);
-  if ((fd = open(path, O_RDONLY, S_IRUSR)) < 0) { PERROR("open"); RETURN(-1); }
+  printf("to open %s\n", path);
+  if ((fd = open(path, O_RDONLY)) < 0) { PERROR("open"); RETURN(-1); }
   struct stat status;
   if (fstat(fd, &status) == -1) { PERROR("fstat"); RETURN(-1); }
   int n_files = 0;

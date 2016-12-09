@@ -75,10 +75,6 @@ int main(int argc, char *argv[]) {
   else if (strcmp(argv[3], C_EXECUTE) == 0) { status = execute(argc, argv); }
   else { printf("unrecongnized command\n"); exit(0); }
 
-  int i;
-  for (i = 3; i != argc - 1; i++) { printf("%s ", argv[i]); }
-  printf("%s\n", argv[argc - 1]);
-
   if (status != 0) { printf("error\n"); }
 
   return 0;
@@ -195,7 +191,8 @@ void *_download(void *pointer) {
   size_t path_size = (strlen(session->path) + 1) * sizeof(char);
   if (send_to(session->socket, session->path, path_size) == -1) { LOG_ERROR(); return (void*)1; }
   int n_files;
-  if (receive_from(session->socket, (void**)&n_files) == -1) { LOG_ERROR(); return (void*)1; }
+  int *_n_files = &n_files;
+  if (receive_from(session->socket, (void**)&_n_files) == -1) { LOG_ERROR(); return (void*)1; }
   if (n_files != -1) { LOG_ERROR(); return (void*)1; }
   if (receive_file(session->socket, session->fd, O_TRUNC) == -1) { LOG_ERROR(); return (void*)1; }
   return 0;
@@ -212,6 +209,8 @@ int download(int argc, char *argv[]) {
   int fd = 0;
   int i = 0; 
 
+  request_t request = S_DOWNLOAD;
+  if (send_to(socket_client, &request, sizeof(request_t)) == -1) { LOG_ERROR(); RETURN(-1); }
   size_t path_size = (strlen(argv[4]) + 1) * sizeof(char);
   if (send_to(socket_client, argv[4], path_size) == -1) { LOG_ERROR(); RETURN(-1); }
   if (receive_from(socket_client, (void**)&_n_files) == -1) { LOG_ERROR(); RETURN(-1); }
@@ -225,11 +224,13 @@ int download(int argc, char *argv[]) {
     default:
       files = (char**)calloc(n_files, sizeof(char*));
       downloading_sessions = (downloading_session_t*)malloc(n_files * sizeof(downloading_session_t));
+      int offset;
       for (i = 0; i != n_files; i++) {
         if (receive_from(socket_client, (void**)(files + i)) == -1) { LOG_ERROR(); RETURN(-1); }
-        asprintf(&(downloading_sessions[i].path), "%s/%s", argv[4], files[i]);
+        downloading_sessions[i].path = files[i];
+        offset = strlen(argv[4]) + 1;
         if (
-          (downloading_sessions[i].fd = open(files[i], O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR)) == -1
+          (downloading_sessions[i].fd = open(files[i] + offset, O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR)) == -1
         ) { PERROR("open"); RETURN(-1); }
         if ((downloading_sessions[i].socket = socket(AF_INET, SOCK_STREAM, 0)) == -1) { PERROR("socket"); return -1; }
         if (
@@ -247,6 +248,7 @@ int download(int argc, char *argv[]) {
         ) { LOG_ERROR(); RETURN(-1); }
       }
 
+      MARK();
       long status, global_status;
       for (i = 0, global_status = 1; i != n_files; i++) {
         pthread_join(downloading_sessions[i].tid, (void**)&status);
@@ -274,7 +276,6 @@ FINALIZE_UPLOAD:
         close(downloading_sessions[i].socket);
       }
       if (downloading_sessions[i].fd > 0) { close(downloading_sessions[i].fd); }
-      FREE(downloading_sessions[i].path);
     }
   FREE(downloading_sessions);
   return returned_value;
