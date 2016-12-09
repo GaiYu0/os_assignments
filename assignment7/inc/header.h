@@ -3,9 +3,8 @@
 #define DEBUG
 
 // constants
-#define BUFFER_SIZE 1
+#define BUFFER_SIZE 1024
 #define SERVER_PORT 5120
-#define MAXIMUM_PATH_SIZE 1024
 
 // server functionality
 typedef int request_t;

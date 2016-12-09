@@ -6,7 +6,7 @@
 
 #include<header.h>
 
-#define MAXIMUM_N_FILES 4
+#define MAXIMUM_N_FILES 1024
 
 array_t global_file_locks;
 pthread_mutex_t array_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -59,6 +59,7 @@ int construct_file_lock(char *path) {
   return 0;
 }
 
+#ifdef NORMAL
 int ropen(char *path, int flags, mode_t mode) {
   pthread_mutex_lock(&array_lock);
   int index;
@@ -73,7 +74,13 @@ int ropen(char *path, int flags, mode_t mode) {
   pthread_mutex_unlock(&(lock->counter_lock));
   return open(path, flags, mode);
 }
+#else
+int ropen(char *path, int flags, mode_t mode) {
+  return open(path, flags, mode);
+}
+#endif
 
+#ifdef NORMAL
 int rclose(char *path) {
   pthread_mutex_lock(&array_lock);
   int index;
@@ -86,7 +93,13 @@ int rclose(char *path) {
   pthread_mutex_unlock(&(lock->counter_lock));
   return 0;
 }
+#else
+int rclose(char *path) {
+  return 0;
+}
+#endif
 
+#ifdef NORMAL
 int wopen(char *path, int flags, mode_t mode) {
   pthread_mutex_lock(&array_lock);
   int index;
@@ -100,7 +113,13 @@ int wopen(char *path, int flags, mode_t mode) {
   while (lock->reference_counter > 0) pthread_cond_wait(&(lock->condition), &(lock->counter_lock));
   return open(path, flags, mode);
 }
+#else
+int wopen(char *path, int flags, mode_t mode) {
+  return open(path, flags, mode);
+}
+#endif
 
+#ifdef NORMAL
 int wclose(char *path) {
   pthread_mutex_lock(&array_lock);
   int index;
@@ -110,17 +129,11 @@ int wclose(char *path) {
   pthread_mutex_unlock(&(lock->counter_lock));
   return 0;
 }
-
-int destroy_file_lock(char *path) {
-  pthread_mutex_lock(&array_lock);
-  int index;
-  if ((index = search_file_lock(path)) == -1) { LOG_ERROR(); return -1; } // TODO
-  file_lock_t *lock = (file_lock_t*)(global_file_locks.array[index]);
-  free(global_file_locks.array[index]);
-  array_delete(&global_file_locks, index);
-  pthread_mutex_unlock(&array_lock);
+#else
+int wclose(char *path) {
   return 0;
 }
+#endif
 
 int destroy_global_file_lock() {
   int i;

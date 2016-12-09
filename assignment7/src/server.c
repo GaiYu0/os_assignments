@@ -90,7 +90,7 @@ int main(int argc, char *argv[]) {
     socklen_t address_length = sizeof(struct sockaddr_in);
     if (
       (client->socket = accept(socket_connection, (struct sockaddr*)(&(client->address)), &address_length)) == -1
-    ) { LOG_ERROR(); continue; }
+    ) { LOG_ERROR(); exit(0); continue; }
 
     pthread_mutex_lock(&info_lock);
     array_append(&clients, (void*)client);
@@ -185,7 +185,7 @@ int upload(client_info_t *client) {
 
 #undef FUNCTION
 FINALIZE_UPLOAD:
-  if (fd > 0) { wclose(path); }
+  if (fd > 0) { close(fd); wclose(path); }
   FREE(path);
   FREE(_path);
   return returned_value;
@@ -223,7 +223,6 @@ int download(client_info_t *client) {
         if (send_to(client->socket, entry_path, path_size) == -1) { LOG_ERROR(); RETURN(-1); }
       }
   } else {
-    if ((fd = ropen(path, O_RDONLY, S_IRUSR)) < 0) { PERROR("open"); RETURN(-1); }
     n_files = -1;
     if (send_to(client->socket, &n_files, sizeof(int)) == -1) { LOG_ERROR(); RETURN(-1); }
     if (send_file(client->socket, fd) == -1) { LOG_ERROR(); RETURN(-1); }
@@ -234,7 +233,7 @@ int download(client_info_t *client) {
 #undef FUNCTION
 FINALIZE_DOWNLOAD:
   FREE(entry_path);
-  if (fd > 0) { rclose(path); }
+  if (fd > 0) { close(fd); rclose(path); }
   FREE(path);
   FREE(_path);
   return returned_value;
