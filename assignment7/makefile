@@ -13,9 +13,9 @@ utility:
 client: utility
 	gcc -o ${OBJ}/client ${SRC}/client.c -c -I${INC} -lpthread
 	gcc -o ${BIN}/client ${OBJ}/client ${OBJ}/utility -I${INC} -lpthread
-server:	clean array utility
+server:	clean array file_lock utility
 	gcc -o ${OBJ}/server ${SRC}/server.c -c -lpthread -I${INC} -D_REENTRANT
-	gcc -o ${BIN}/server ${OBJ}/server ${OBJ}/array ${OBJ}/utility -lpthread -I${INC}
+	gcc -o ${BIN}/server ${OBJ}/server ${OBJ}/array ${OBJ}/file_lock ${OBJ}/utility -lpthread -I${INC}
 test: array file_lock
 	gcc -o ${OBJ}/test test.c -c -I${INC} -lpthread
 	gcc -o a.out ${OBJ}/test ${OBJ}/array ${OBJ}/file_lock -lpthread

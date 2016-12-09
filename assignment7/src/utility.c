@@ -6,7 +6,7 @@
 
 #include<header.h>
 
-#define MAXIMUM_WAITING_TIME 3
+#define MAXIMUM_WAITING_TIME 1
 
 int _send_to(int fd, void *buffer, size_t size) {
   size_t offset = 0;

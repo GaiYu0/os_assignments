@@ -123,7 +123,16 @@ int upload(int argc, char *argv[]) {
     rewinddir(directory);
     while ((entry = readdir(directory)) != NULL)
       if (entry->d_type == DT_REG) { asprintf(files + (i++), "%s", entry->d_name); }
-  } else { n_files = 1; asprintf(files, "%s", argv[4]); }
+  } else {
+    uploading_session_t session;
+    session.path = basename(argv[4]);
+    session.fd = fd;
+    session.socket = socket_client;
+    pthread_t tid;
+    if (pthread_create(&tid, NULL, &_upload, (void**)&session) != 0) { PERROR("pthread_create"); RETURN(-1); }
+    pthread_join(tid, NULL);
+    RETURN(0);
+  }
 
   uploading_sessions = (uploading_session_t*)malloc(n_files * sizeof(uploading_session_t));
   for (i = 0; i != n_files; i++) {

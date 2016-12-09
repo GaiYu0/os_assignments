@@ -178,14 +178,14 @@ int upload(client_info_t *client) {
   int fd;
   if (receive_from(client->socket, (void**)&_path) == -1) { LOG_ERROR(); RETURN(-1); }
   asprintf(&path, "%s/%s", storage, _path);
-  if ((fd = open(path, O_CREAT | O_TRUNC | O_WRONLY, S_IRUSR | S_IWUSR)) < 0) { PERROR("open"); RETURN(-1); }
+  if ((fd = wopen(path, O_CREAT | O_TRUNC | O_WRONLY, S_IRUSR | S_IWUSR)) < 0) { PERROR("open"); RETURN(-1); }
   if (receive_file(client->socket, fd, O_TRUNC) == -1) { PERROR("open"); RETURN(-1); }
   
   RETURN(0);
 
 #undef FUNCTION
 FINALIZE_UPLOAD:
-  if (fd > 0) { close(fd); }
+  if (fd > 0) { wclose(path); }
   FREE(path);
   FREE(_path);
   return returned_value;
@@ -198,12 +198,11 @@ int download(client_info_t *client) {
   char *_path = NULL;
   char *path = NULL;
   int fd = 0;
-  char *entry_path;
+  char *entry_path = NULL;
 
   if (receive_from(client->socket, (void**)&_path) == -1) { LOG_ERROR(); RETURN(-1); }
   asprintf(&path, "%s/%s", storage, _path);
-  printf("to open %s\n", path);
-  if ((fd = open(path, O_RDONLY)) < 0) { PERROR("open"); RETURN(-1); }
+  if ((fd = ropen(path, O_RDONLY, S_IRUSR)) < 0) { PERROR("open"); RETURN(-1); }
   struct stat status;
   if (fstat(fd, &status) == -1) { PERROR("fstat"); RETURN(-1); }
   int n_files = 0;
@@ -224,9 +223,10 @@ int download(client_info_t *client) {
         if (send_to(client->socket, entry_path, path_size) == -1) { LOG_ERROR(); RETURN(-1); }
       }
   } else {
+    if ((fd = ropen(path, O_RDONLY, S_IRUSR)) < 0) { PERROR("open"); RETURN(-1); }
     n_files = -1;
     if (send_to(client->socket, &n_files, sizeof(int)) == -1) { LOG_ERROR(); RETURN(-1); }
-    if (send_file(client->socket, fd) == -1) { PERROR("open"); RETURN(-1); }
+    if (send_file(client->socket, fd) == -1) { LOG_ERROR(); RETURN(-1); }
   }
 
   RETURN(0);
@@ -234,7 +234,7 @@ int download(client_info_t *client) {
 #undef FUNCTION
 FINALIZE_DOWNLOAD:
   FREE(entry_path);
-  if (fd > 0) { close(fd); }
+  if (fd > 0) { rclose(path); }
   FREE(path);
   FREE(_path);
   return returned_value;
