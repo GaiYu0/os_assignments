@@ -6,7 +6,7 @@
 
 #include<header.h>
 
-#define MAXIMUM_N_FILES 1024
+#define MAXIMUM_N_FILES 4
 
 array_t global_file_locks;
 pthread_mutex_t array_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -30,8 +30,24 @@ int construct_global_file_lock() {
   return 0;
 }
 
+int global_file_lock_gc() {
+  if (global_file_locks.length > MAXIMUM_N_FILES) {
+    int i;
+    for (i = 0; i != global_file_locks.length; i++) {
+      pthread_mutex_lock(&(GET(file_lock_t, global_file_locks, i).counter_lock));
+      if (GET(file_lock_t, global_file_locks, i).reference_counter == 0) {
+        free(global_file_locks.array[i]);
+        array_delete(&global_file_locks, i);
+      }
+      pthread_mutex_unlock(&(GET(file_lock_t, global_file_locks, i).counter_lock));
+    }
+  }
+  return 0;
+}
+
 int construct_file_lock(char *path) {
-  pthread_mutex_lock(&array_lock);
+  global_file_lock_gc();
+  // pthread_mutex_lock(&array_lock);
   if (search_file_lock(path) != -1) { LOG_ERROR(); return -1; }
   file_lock_t lock;
   lock.path = path;
@@ -39,14 +55,17 @@ int construct_file_lock(char *path) {
   pthread_mutex_init(&(lock.counter_lock), NULL);
   pthread_cond_init(&(lock.condition), NULL);
   APPEND(file_lock_t, global_file_locks, lock);
-  pthread_mutex_unlock(&array_lock);
+  // pthread_mutex_unlock(&array_lock);
   return 0;
 }
 
 int ropen(char *path, int flags, mode_t mode) {
   pthread_mutex_lock(&array_lock);
   int index;
-  if ((index = search_file_lock(path)) == -1) { LOG_ERROR(); return -1; } // TODO
+  if ((index = search_file_lock(path)) == -1) { // TODO
+    if (construct_file_lock(path) == -1) { LOG_ERROR(); return -1; }
+    index = global_file_locks.length - 1;
+  }
   file_lock_t *lock = (file_lock_t*)(global_file_locks.array[index]);
   pthread_mutex_unlock(&array_lock);
   pthread_mutex_lock(&(lock->counter_lock));
@@ -58,12 +77,12 @@ int ropen(char *path, int flags, mode_t mode) {
 int rclose(char *path) {
   pthread_mutex_lock(&array_lock);
   int index;
-  if ((index = search_file_lock(path)) == -1) { LOG_ERROR(); return -1; } // TODO
+  if ((index = search_file_lock(path)) == -1) { LOG_ERROR(); return -1; }
   file_lock_t *lock = (file_lock_t*)(global_file_locks.array[index]);
   pthread_mutex_unlock(&array_lock);
   pthread_mutex_lock(&(lock->counter_lock));
   lock->reference_counter--;
-  if (lock->reference_counter == 0) { pthread_cond_signal(&(lock->condition)); }
+  if (lock->reference_counter == 0) { pthread_cond_broadcast(&(lock->condition)); }
   pthread_mutex_unlock(&(lock->counter_lock));
   return 0;
 }
@@ -71,18 +90,21 @@ int rclose(char *path) {
 int wopen(char *path, int flags, mode_t mode) {
   pthread_mutex_lock(&array_lock);
   int index;
-  if ((index = search_file_lock(path)) == -1) { LOG_ERROR(); return -1; } // TODO
+  if ((index = search_file_lock(path)) == -1) { // TODO
+    if (construct_file_lock(path) == -1) { LOG_ERROR(); return -1; }
+    index = global_file_locks.length - 1;
+  }
   file_lock_t *lock = (file_lock_t*)(global_file_locks.array[index]);
   pthread_mutex_unlock(&array_lock);
   pthread_mutex_lock(&(lock->counter_lock));
-  if (lock->reference_counter > 0) pthread_cond_wait(&(lock->condition), &(lock->counter_lock));
+  while (lock->reference_counter > 0) pthread_cond_wait(&(lock->condition), &(lock->counter_lock));
   return open(path, flags, mode);
 }
 
 int wclose(char *path) {
   pthread_mutex_lock(&array_lock);
   int index;
-  if ((index = search_file_lock(path)) == -1) { LOG_ERROR(); return -1; } // TODO
+  if ((index = search_file_lock(path)) == -1) { LOG_ERROR(); return -1; }
   file_lock_t *lock = (file_lock_t*)(global_file_locks.array[index]);
   pthread_mutex_unlock(&array_lock);
   pthread_mutex_unlock(&(lock->counter_lock));
@@ -94,14 +116,9 @@ int destroy_file_lock(char *path) {
   int index;
   if ((index = search_file_lock(path)) == -1) { LOG_ERROR(); return -1; } // TODO
   file_lock_t *lock = (file_lock_t*)(global_file_locks.array[index]);
-  pthread_mutex_unlock(&array_lock);
-  pthread_mutex_lock(&(lock->counter_lock));
-  if (lock->reference_counter > 0) pthread_cond_wait(&(lock->condition), &(lock->counter_lock));
   free(global_file_locks.array[index]);
-  pthread_mutex_lock(&array_lock);
   array_delete(&global_file_locks, index);
   pthread_mutex_unlock(&array_lock);
-  pthread_mutex_unlock(&(lock->counter_lock));
   return 0;
 }
 

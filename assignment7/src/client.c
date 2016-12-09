@@ -63,11 +63,13 @@ int main(int argc, char *argv[]) {
   if (argc < 5) { printf("unrecongnized command\n"); exit(0); }
   initialize_client(argc, argv);
   if (connect_to_server(argc, argv) == 0) {
+    /*
     printf(
       "connected to server %s:%d\n",
       inet_ntoa(address_server.sin_addr),
       address_server.sin_port
     );
+    */
   } else { printf("cannot connect to server\n"); exit(0); }
   int status;
   if (strcmp(argv[3], C_UPLOAD) == 0) { status = upload(argc, argv); }
@@ -248,7 +250,6 @@ int download(int argc, char *argv[]) {
         ) { LOG_ERROR(); RETURN(-1); }
       }
 
-      MARK();
       long status, global_status;
       for (i = 0, global_status = 1; i != n_files; i++) {
         pthread_join(downloading_sessions[i].tid, (void**)&status);

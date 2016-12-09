@@ -116,6 +116,7 @@ int initialize_server(int argc, char *argv[]) {
   atexit(&cleanup);
 
   construct_array(&clients);
+  construct_global_file_lock();
 
   if ((socket_connection = socket(AF_INET, SOCK_STREAM, 0)) == -1) { LOG_ERROR(); return -1; }
   memset(&address_server, 0, sizeof(struct sockaddr_in));
@@ -293,6 +294,7 @@ void cleanup() {
       free(clients.array[i]);
     }
     destroy_array(&clients);
+    destroy_global_file_lock();
     pthread_mutex_unlock(&info_lock);
     cleaned = 1;
   }

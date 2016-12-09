@@ -32,7 +32,7 @@ void *thread(void *pointer) {
   srand(pthread_self());
   double value = ((double)rand()) / RAND_MAX;
   if (value < 0.5) {
-    printf("%f\n", value);
+    printf("write\n");
     fd = wopen("__file__", O_WRONLY, S_IRUSR | S_IWUSR);
     int i;
     for (i = 0; i != strlen(content) + 1; i++) {
@@ -40,6 +40,7 @@ void *thread(void *pointer) {
     }
     wclose("__file__");
   } else {
+    printf("read\n");
     char *file;
     asprintf(&file, "gettysburg%d", pthread_self());
     fd = ropen("__file__", O_RDONLY, S_IRUSR);
@@ -61,20 +62,19 @@ void *thread(void *pointer) {
   return NULL;
 }
 
-int main() {
-  int construct_global_file_lock();
-  int N = 9;
+int main(int argc, char *argv[]) {
+  construct_global_file_lock();
+  int N = atoi(argv[1]);
   pthread_t *tids = (pthread_t*)malloc(N * sizeof(pthread_t));
   int i;
   int fd = open("__file__", O_CREAT, S_IRUSR | S_IWUSR);
-  construct_file_lock("__file__");
   for (i = 0; i != N; i++)
     pthread_create(tids + i, NULL, &thread, NULL);
-  for (i = 0; i != N; i++)
+  for (i = 0; i != N; i++) {
     pthread_join(tids[i], NULL);
-  destroy_file_lock("__file__");
+  }
   close(fd);
   free(tids);
-  int destroy_global_file_lock();
+  destroy_global_file_lock();
   return 0;
 }
