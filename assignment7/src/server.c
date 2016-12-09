@@ -108,6 +108,9 @@ int main(int argc, char *argv[]) {
 
 int initialize_server(int argc, char *argv[]) {
   struct sigaction action;
+  action.sa_handler = &default_handler;
+  int i;
+  for (i = 0; i != NSIG; i++) sigaction(i, &action, NULL);
   action.sa_handler = &signal_cleanup;
   sigaction(SIGINT, &action, NULL);
   action.sa_handler = SIG_IGN;
@@ -305,4 +308,5 @@ void signal_cleanup(int signal) {
 }
 
 void default_handler(int signal) {
+  printf("signal %d\n", signal);
 }

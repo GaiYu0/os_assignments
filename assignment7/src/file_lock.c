@@ -6,7 +6,8 @@
 
 #include<header.h>
 
-#define MAXIMUM_N_FILES 1024
+#define MAXIMUM_N_FILES 64
+#define NORMAL
 
 array_t global_file_locks;
 pthread_mutex_t array_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -32,6 +33,7 @@ int construct_global_file_lock() {
 
 int global_file_lock_gc() {
   if (global_file_locks.length > MAXIMUM_N_FILES) {
+    printf("%d\n", global_file_locks.length);
     int i;
     for (i = 0; i != global_file_locks.length; i++) {
       pthread_mutex_lock(&(GET(file_lock_t, global_file_locks, i).counter_lock));
