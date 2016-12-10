@@ -178,7 +178,7 @@ int upload(client_info_t *client) {
 
   char *_path = NULL;
   char *path = NULL;
-  int fd;
+  int fd = 0;
   if (receive_from(client->socket, (void**)&_path) == -1) { LOG_ERROR(); RETURN(-1); }
   asprintf(&path, "%s/%s", storage, _path);
   if ((fd = wopen(path, O_CREAT | O_TRUNC | O_WRONLY, S_IRUSR | S_IWUSR)) < 0) { PERROR("open"); RETURN(-1); }

@@ -6,7 +6,7 @@
 
 #include<header.h>
 
-#define MAXIMUM_N_FILES 64
+#define MAXIMUM_N_FILES 4096
 #define NORMAL
 
 array_t global_file_locks;
@@ -33,7 +33,6 @@ int construct_global_file_lock() {
 
 int global_file_lock_gc() {
   if (global_file_locks.length > MAXIMUM_N_FILES) {
-    printf("%d\n", global_file_locks.length);
     int i;
     for (i = 0; i != global_file_locks.length; i++) {
       pthread_mutex_lock(&(GET(file_lock_t, global_file_locks, i).counter_lock));
@@ -66,7 +65,7 @@ int ropen(char *path, int flags, mode_t mode) {
   pthread_mutex_lock(&array_lock);
   int index;
   if ((index = search_file_lock(path)) == -1) { // TODO
-    if (construct_file_lock(path) == -1) { LOG_ERROR(); return -1; }
+    if (construct_file_lock(path) == -1) { LOG_ERROR(); pthread_mutex_unlock(&array_lock); return -1; }
     index = global_file_locks.length - 1;
   }
   file_lock_t *lock = (file_lock_t*)(global_file_locks.array[index]);
@@ -86,7 +85,7 @@ int ropen(char *path, int flags, mode_t mode) {
 int rclose(char *path) {
   pthread_mutex_lock(&array_lock);
   int index;
-  if ((index = search_file_lock(path)) == -1) { LOG_ERROR(); return -1; }
+  if ((index = search_file_lock(path)) == -1) { LOG_ERROR(); pthread_mutex_unlock(&array_lock); return -1; }
   file_lock_t *lock = (file_lock_t*)(global_file_locks.array[index]);
   pthread_mutex_unlock(&array_lock);
   pthread_mutex_lock(&(lock->counter_lock));
@@ -106,7 +105,7 @@ int wopen(char *path, int flags, mode_t mode) {
   pthread_mutex_lock(&array_lock);
   int index;
   if ((index = search_file_lock(path)) == -1) { // TODO
-    if (construct_file_lock(path) == -1) { LOG_ERROR(); return -1; }
+    if (construct_file_lock(path) == -1) { LOG_ERROR(); pthread_mutex_unlock(&array_lock); return -1; }
     index = global_file_locks.length - 1;
   }
   file_lock_t *lock = (file_lock_t*)(global_file_locks.array[index]);
@@ -125,7 +124,7 @@ int wopen(char *path, int flags, mode_t mode) {
 int wclose(char *path) {
   pthread_mutex_lock(&array_lock);
   int index;
-  if ((index = search_file_lock(path)) == -1) { LOG_ERROR(); return -1; }
+  if ((index = search_file_lock(path)) == -1) { LOG_ERROR(); pthread_mutex_unlock(&array_lock); return -1; } 
   file_lock_t *lock = (file_lock_t*)(global_file_locks.array[index]);
   pthread_mutex_unlock(&array_lock);
   pthread_mutex_unlock(&(lock->counter_lock));
